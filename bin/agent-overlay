@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# != 2 || ! $1 =~ ^(resolve|init)$ ]]; then
+    echo 'Usage: agent-overlay resolve|init PROJECT_ROOT' >&2
+    exit 2
+fi
+
+root=$(realpath -e -- "$2")
+if [[ ! -d $root ]]; then
+    echo "agent-overlay: not a project directory: $root" >&2
+    exit 1
+fi
+
+store=$HOME/.agent-overlays
+if [[ -L $store ]]; then
+    echo "agent-overlay: overlay store must be local: $store" >&2
+    exit 1
+fi
+
+base=$(basename "$root" | LC_ALL=C sed 's/[^a-zA-Z0-9_.-]/-/g')
+digest=$(printf '%s' "$root" | sha256sum)
+overlay=$store/$base-${digest:0:12}
+if [[ $1 == init ]]; then
+    mkdir -p "$overlay/plans"
+    if [[ ! -e $overlay/plans/README.md ]]; then
+        printf '%s\n' \
+            'Personal specs, plans, handoffs, and research for this project.' \
+            > "$overlay/plans/README.md"
+    fi
+elif [[ ! -d $overlay ]]; then
+    echo "agent-overlay: no overlay for $root; run agent-overlay init" >&2
+    exit 1
+fi
+
+printf '%s\n' "$overlay"

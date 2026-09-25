@@ -1,0 +1,345 @@
+#!/usr/bin/bash
+# Run an agent CLI under bubblewrap with permissions off.
+# Writable host paths: target project, its overlay, persistent home,
+# and the credential files required for token refresh.
+
+set -euo pipefail
+
+TOOLING=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+source "$TOOLING/lib/links.sh"
+STATE_ROOT=${AGENT_SANDBOX_ROOT:-$HOME/.agent-sandboxes}
+
+usage() {
+	cat <<EOF
+Usage: sandbox {claude|cursor|codex|shell} [options] [-- agent args...]
+
+Options:
+  -r, --repo DIR   Repo to expose read-write (default: git root of \$PWD)
+  -n, --name NAME  Sandbox state name (default: basename + root hash)
+      --reset      Delete this sandbox's saved home before starting
+      --list       List existing sandboxes and exit
+  -h, --help       Show this help
+
+The sandbox home persists at $STATE_ROOT/<name>/home so venvs, caches
+and agent chat history survive between runs.
+EOF
+}
+
+agent=
+repo=
+name=
+reset=0
+extra=()
+
+while (($#)); do
+	case $1 in
+		claude) agent=claude ;;
+		cursor) agent=cursor ;;
+		codex) agent=codex ;;
+		shell) agent=shell ;;
+		-r|--repo) repo=${2:?missing repo}; shift ;;
+		-n|--name) name=${2:?missing name}; shift ;;
+		--reset) reset=1 ;;
+		--list) ls -1 "$STATE_ROOT" 2>/dev/null; exit 0 ;;
+		-h|--help) usage; exit 0 ;;
+		--) shift; extra=("$@"); break ;;
+		*) echo "sandbox: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+	esac
+	shift
+done
+
+if [[ -z $agent ]]; then
+	echo "sandbox: need agent (claude|cursor|codex|shell)" >&2
+	exit 1
+fi
+
+
+if [[ -z $repo ]]; then
+	repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+fi
+repo=$(readlink -f "$repo")
+
+# Binding $HOME or / read-write would defeat the whole point.
+case $repo in
+	/|"$HOME"|/home|/home/*/)
+        echo "sandbox: refusing repo $repo" >&2; exit 1 ;;
+esac
+if [[ ! -d $repo ]]; then
+	echo "sandbox: no such directory: $repo" >&2
+	exit 1
+fi
+if [[ $HOME/ == "$repo"/* ]]; then
+	echo "sandbox: $repo contains \$HOME, refusing" >&2
+	exit 1
+fi
+
+# Reject roots that would expose all overlays or the sandbox state store.
+for protected in "$HOME/.agent-overlays" "$STATE_ROOT"; do
+    protected=$(realpath -m "$protected")
+    if [[ $protected == "$repo" || $protected == "$repo"/* ]]; then
+        echo "sandbox: repo contains protected storage: $protected" >&2
+        exit 1
+    fi
+done
+if [[ $repo != "$TOOLING" && $TOOLING == "$repo"/* ]]; then
+    echo "sandbox: select a project, not the tooling parent" >&2
+    exit 1
+fi
+
+# Keep executable hooks and persistent Git configuration out of the
+# writable project mount. Git paths can differ from .git in a worktree.
+git_mounts=()
+git_root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -z $git_root && $(git -C "$repo" rev-parse \
+    --is-bare-repository 2>/dev/null || true) == true ]]; then
+    git_root=$(git -C "$repo" rev-parse --absolute-git-dir)
+fi
+if [[ -n $git_root && $(readlink -f "$git_root") == "$repo" ]]; then
+    if [[ -L $repo/.git ]]; then
+        echo 'sandbox: symlinked .git is unsupported' >&2
+        exit 1
+    fi
+    git_dir=$(git -C "$repo" rev-parse --path-format=absolute \
+        --absolute-git-dir)
+    git_common=$(git -C "$repo" rev-parse --path-format=absolute \
+        --git-common-dir)
+    git_hooks=$(git -C "$repo" rev-parse --path-format=absolute \
+        --git-path hooks)
+    git_config=$(git -C "$repo" rev-parse --path-format=absolute \
+        --git-path config)
+    if [[ -L $git_config || -L $git_dir/config.worktree ]]; then
+        echo 'sandbox: symlinked Git config is unsupported' >&2
+        exit 1
+    fi
+
+    hooks_paths=("$git_hooks")
+    if custom_hooks=$(git -C "$repo" config --path \
+        --get core.hooksPath); then
+        if [[ $custom_hooks != /* ]]; then
+            custom_hooks=$repo/$custom_hooks
+        fi
+        hooks_paths+=("$custom_hooks")
+    fi
+
+    # Separate Git directories must be visible for worktree commands.
+    if [[ $git_common != "$repo"/* && $git_common != "$repo" ]]; then
+        git_mounts+=(--bind "$git_common" "$git_common")
+    fi
+    git_mounts+=(--bind "$git_dir" "$git_dir")
+    if [[ -f $repo/.git ]]; then
+        git_mounts+=(--ro-bind "$repo/.git" "$repo/.git")
+    fi
+    for path in "${hooks_paths[@]}"; do
+        if [[ $(realpath -m -- "$path") != \
+            $(realpath -m -s -- "$path") ]]; then
+            echo "sandbox: symlinked hooks path: $path" >&2
+            exit 1
+        fi
+        path=$(realpath -m -s -- "$path")
+        if [[ ! -e $path ]]; then
+            if [[ $path != "$repo"/* && \
+                $path != "$git_common"/* ]]; then
+                echo "sandbox: missing hooks path: $path" >&2
+                exit 1
+            fi
+            mkdir -p "$path"
+        fi
+        if [[ -d $path ]]; then
+            git_mounts+=(--ro-bind "$path" "$path")
+        fi
+    done
+    git_mounts+=(--ro-bind "$git_config" "$git_config")
+    if [[ $(git -C "$repo" config --bool \
+        --get extensions.worktreeConfig || true) == true ]]; then
+        touch "$git_dir/config.worktree"
+    fi
+    if [[ -f $git_dir/config.worktree ]]; then
+        git_mounts+=(--ro-bind "$git_dir/config.worktree" \
+            "$git_dir/config.worktree")
+    fi
+fi
+
+digest=$(printf '%s' "$repo" | sha256sum)
+[[ -n $name ]] || name="$(basename "$repo")-${digest:0:12}"
+if [[ ! $name =~ ^[a-zA-Z0-9_.-]+$ || $name == . || $name == .. ]]; then
+    echo "sandbox: invalid state name: $name" >&2
+    exit 1
+fi
+sbx=$STATE_ROOT/$name
+sbxhome=$sbx/home
+if [[ -L $sbx || -L $sbxhome || -L $sbx/project ]]; then
+    echo "sandbox: state directories must not be symlinks" >&2
+    exit 1
+fi
+if [[ -f $sbx/project && $(cat "$sbx/project") != "$repo" ]]; then
+    echo "sandbox: state name belongs to a different project" >&2
+    exit 1
+fi
+((reset)) && rm -rf -- "$sbx"
+mkdir -p "$sbxhome"
+printf '%s' "$repo" > "$sbx/project"
+overlay=$("$TOOLING/bin/agent-overlay" init "$repo")
+
+# The seed contains configuration links, never copies of project overlays.
+seed_home() {
+    # A reused home is writable by the agent. Check parents before any
+    # host-side writes; these guards belong to runtime seeding, not setup.
+    local target parent
+    for target in .agents/skills .cursor/skills .cursor/rules \
+        .claude/skills .codex .local/bin .config .cache .local/share \
+        .npm-global/bin .cargo/bin; do
+        parent=$sbxhome/$target
+        while [[ $parent == "$sbxhome"/* ]]; do
+            if [[ -L $parent || ( -e $parent && ! -d $parent ) ]]; then
+                echo "sandbox: conflicting config parent: $parent" >&2
+                return 1
+            fi
+            parent=$(dirname "$parent")
+        done
+    done
+    for target in .claude.json .claude/settings.json; do
+        if [[ -L $sbxhome/$target ]]; then
+            echo "sandbox: conflicting config: $target" >&2
+            return 1
+        fi
+    done
+    link_home "$sbxhome" "$TOOLING"
+    mkdir -p "$sbxhome"/{.config,.cache,.local/share,.npm-global/bin}
+
+	# CARGO_HOME is per-sandbox so `cargo install` and registry cache
+	# stay local, but rustup shims are 20M of identical binaries; link
+	# them to the read-only copy bound at .cargo/hostbin instead.
+	if [[ -d $HOME/.cargo/bin ]]; then
+		mkdir -p "$sbxhome/.cargo/bin"
+		for d in "$HOME"/.cargo/bin/*; do
+			ln -sfn "../hostbin/${d##*/}" "$sbxhome/.cargo/bin/${d##*/}"
+		done
+	fi
+
+	[[ -f $sbxhome/.claude/settings.json ]] ||
+		cp -n "$HOME/.claude/settings.json" "$sbxhome/.claude/" 2>/dev/null ||
+		true
+
+	if [[ ! -f $sbxhome/.claude.json && -f $HOME/.claude.json ]]; then
+		cp "$HOME/.claude.json" "$sbxhome/.claude.json"
+	fi
+}
+seed_home
+
+# Credential files are bound read-write: the CLIs rotate their
+# tokens, and a stale copy would fight with the host's.
+creds=()
+[[ -f $HOME/.claude/.credentials.json ]] &&
+	creds+=(--bind "$HOME/.claude/.credentials.json"
+		"$HOME/.claude/.credentials.json")
+[[ -f $HOME/.config/cursor/auth.json ]] &&
+	creds+=(--bind "$HOME/.config/cursor/auth.json"
+		"$HOME/.config/cursor/auth.json")
+[[ -f $HOME/.cursor/cli-config.json ]] &&
+	creds+=(--bind "$HOME/.cursor/cli-config.json"
+		"$HOME/.cursor/cli-config.json")
+[[ -f $HOME/.codex/auth.json ]] &&
+	creds+=(--bind "$HOME/.codex/auth.json" "$HOME/.codex/auth.json")
+
+# Resolve host nvm's default node so node/npm/npx land on PATH. The whole
+# ~/.nvm is bound read-only, so only its bin dir needs to be on PATH.
+node_bin=
+if [[ -d $HOME/.nvm/versions/node ]]; then
+	v=$(cat "$HOME/.nvm/alias/default" 2>/dev/null || true)
+	while [[ -n $v && -f $HOME/.nvm/alias/$v ]]; do
+		v=$(cat "$HOME/.nvm/alias/$v")
+	done
+	node_bin=$HOME/.nvm/versions/node/$v/bin
+	[[ -d $node_bin ]] ||
+		node_bin=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null |
+			sort -V | tail -1)
+fi
+
+case "$agent" in
+	shell) 
+		if ((${#extra[@]})); then
+			cmd=(bash --norc "${extra[@]}")
+		else
+			cmd=(bash --norc -i)
+		fi
+		;;
+	claude)
+		cmd=(~/.local/bin/claude --dangerously-skip-permissions "${extra[@]}")
+		;;
+	cursor)
+		cmd=(~/.local/bin/agent --force --trust
+			--sandbox disabled "${extra[@]}")
+		;;
+	codex)
+		# YOLO: Codex's own sandbox cannot nest in bwrap; bwrap is the fence.
+		cmd=(~/.local/bin/codex \
+			--dangerously-bypass-approvals-and-sandbox "${extra[@]}")
+		;;
+	*)
+		echo "sandbox: agent $agent invalid, choose claude, cursor, codex, or shell" >&2
+		exit 1
+esac
+
+tooling_mount=(--ro-bind "$TOOLING" "$TOOLING")
+[[ $repo != "$TOOLING" ]] || tooling_mount=(--bind "$TOOLING" "$TOOLING")
+sandbox_path="$HOME/.npm-global/bin:${node_bin:+$node_bin:}"
+sandbox_path+="$HOME/.local/bin:$TOOLING/bin:$HOME/.cargo/bin"
+sandbox_path+=":/usr/local/bin:/usr/bin:/bin"
+
+# No --new-session: it would detach the controlling tty and break Ctrl-C
+# in the agent TUI. The TIOCSTI injection it guards against is compiled
+# out of this kernel (no dev.tty.legacy_tiocsti sysctl).
+exec bwrap \
+	--clearenv \
+	--setenv HOME "$HOME" \
+	--setenv USER "${USER:-$(id -un)}" \
+	--setenv SHELL /bin/bash \
+	--setenv PATH \
+		"$sandbox_path" \
+	--setenv npm_config_prefix "$HOME/.npm-global" \
+	--setenv NVM_DIR "$HOME/.nvm" \
+	--setenv TERM "${TERM:-xterm-256color}" \
+	--setenv COLORTERM "${COLORTERM:-truecolor}" \
+	--setenv LANG "${LANG:-C.UTF-8}" \
+	--setenv CARGO_HOME "$HOME/.cargo" \
+	--setenv RUSTUP_HOME "$HOME/.rustup" \
+	--setenv AGENT_SANDBOX "$name" \
+	--unshare-all --share-net \
+	--die-with-parent \
+	--proc /proc \
+	--dev /dev \
+	--ro-bind /usr /usr \
+	--ro-bind /etc /etc \
+	--ro-bind /sys /sys \
+	--ro-bind-try /opt /opt \
+	--ro-bind-try /var /var \
+	--symlink usr/bin /bin \
+	--symlink usr/sbin /sbin \
+	--symlink usr/lib /lib \
+	--symlink usr/lib32 /lib32 \
+	--symlink usr/lib64 /lib64 \
+	--tmpfs /tmp \
+	--tmpfs /run \
+	--tmpfs /var/tmp \
+	--bind "$sbxhome" "$HOME" \
+	--ro-bind-try "$HOME/.local/bin" "$HOME/.local/bin" \
+	--ro-bind-try "$HOME/.local/lib" "$HOME/.local/lib" \
+	--ro-bind-try "$HOME/.local/share/pipx" "$HOME/.local/share/pipx" \
+	--ro-bind-try "$HOME/.local/share/claude" "$HOME/.local/share/claude" \
+	--ro-bind-try "$HOME/.local/share/cursor-agent" \
+		"$HOME/.local/share/cursor-agent" \
+	--ro-bind-try "$HOME/.codex/packages" "$HOME/.codex/packages" \
+	--ro-bind-try "$HOME/.rustup" "$HOME/.rustup" \
+	--ro-bind-try "$HOME/.nvm" "$HOME/.nvm" \
+	--ro-bind-try "$HOME/.cargo/bin" "$HOME/.cargo/hostbin" \
+	--ro-bind-try "$HOME/.cursor/skills-cursor" "$HOME/.cursor/skills-cursor" \
+	--ro-bind-try "$HOME/.gitconfig" "$HOME/.gitconfig" \
+	"${creds[@]}" \
+	"${tooling_mount[@]}" \
+	--bind "$repo" "$repo" \
+	"${git_mounts[@]}" \
+	--tmpfs "$HOME/.agent-overlays" \
+	--bind "$overlay" "$overlay" \
+	--remount-ro "$HOME/.agent-overlays" \
+	--chdir "$repo" \
+	-- "${cmd[@]}"
