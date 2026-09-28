@@ -45,6 +45,7 @@ Note that agents are mostly run inside of `bubblewrap`ped sandboxes with read-on
 - Concise; no filler.
 - When recommending a library, data structure, or framework that is not the only/obvious choice: give alternatives and why you prefer one.
 - Research answers: summarize in chat. Substantial research also writes a note citing primary sources to the overlay's `plans/`.
+- When the user asked for prose (e.g. answering a question, writing a spec) or when delivering a nontrivial report (e.g. explaining a large implementation), use `/unslop` for better writing.
 
 ## General code style
 - No lines of code or comments with length >=80 unless absolutely necessary, including tabs as 4 spaces
