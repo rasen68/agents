@@ -33,5 +33,9 @@ fi
 
 for package in pi-web-access pi-subagents pi-plans-mode pi-undo-redo \
     @juicesharp/rpiv-todo @juicesharp/rpiv-ask-user-question; do
-    pi install "npm:$package"
+    pi install "npm:$package" || exit "$?"
 done
+
+# rpiv manifests must use Pi's host modules rather than runtime dependencies.
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit "$?"
+python3 "$script_dir/lib/normalize-rpiv-peers.py"
