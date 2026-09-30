@@ -181,6 +181,18 @@ mkdir -p "$sbxhome"
 printf '%s' "$repo" > "$sbx/project"
 overlay=$("$TOOLING/bin/agent-overlay" init "$repo")
 
+# Keep preferences shared while sessions and caches stay per-sandbox.
+config_files=(
+    .claude.json .claude/settings.json .claude/settings.local.json
+    .claude/keybindings.json .cursor/cli-config.json
+    .codex/config.toml .codex/hooks.json
+    .pi/agent/settings.json .pi/agent/models.json
+    .pi/agent/keybindings.json
+)
+for profile in "$HOME"/.codex/*.config.toml; do
+    [[ -f $profile ]] && config_files+=("${profile#"$HOME"/}")
+done
+
 # The seed contains configuration links, never copies of project overlays.
 seed_home() {
     # A reused home is writable by the agent. Check parents before any
@@ -198,8 +210,7 @@ seed_home() {
             parent=$(dirname "$parent")
         done
     done
-    for target in .claude.json .claude/settings.json \
-        .pi/agent/settings.json .pi/agent/models.json; do
+    for target in "${config_files[@]}"; do
         if [[ -L $sbxhome/$target ]]; then
             echo "sandbox: conflicting config: $target" >&2
             return 1
@@ -207,13 +218,6 @@ seed_home() {
     done
     link_home "$sbxhome" "$TOOLING"
     mkdir -p "$sbxhome"/{.config,.cache,.local/share,.npm-global/bin}
-
-    for target in settings.json models.json; do
-        if [[ ! -e $sbxhome/.pi/agent/$target && \
-            -f $HOME/.pi/agent/$target ]]; then
-            cp "$HOME/.pi/agent/$target" "$sbxhome/.pi/agent/$target"
-        fi
-    done
 
 	# CARGO_HOME is per-sandbox so `cargo install` and registry cache
 	# stay local, but rustup shims are 20M of identical binaries; link
@@ -224,16 +228,15 @@ seed_home() {
 			ln -sfn "../hostbin/${d##*/}" "$sbxhome/.cargo/bin/${d##*/}"
 		done
 	fi
-
-	[[ -f $sbxhome/.claude/settings.json ]] ||
-		cp -n "$HOME/.claude/settings.json" "$sbxhome/.claude/" 2>/dev/null ||
-		true
-
-	if [[ ! -f $sbxhome/.claude.json && -f $HOME/.claude.json ]]; then
-		cp "$HOME/.claude.json" "$sbxhome/.claude.json"
-	fi
 }
 seed_home
+
+configs=()
+for target in "${config_files[@]}"; do
+    if [[ -f $HOME/$target ]]; then
+        configs+=(--ro-bind "$HOME/$target" "$HOME/$target")
+    fi
+done
 
 # Credential files are bound read-write: the CLIs rotate their
 # tokens, and a stale copy would fight with the host's.
@@ -244,9 +247,6 @@ creds=()
 [[ -f $HOME/.config/cursor/auth.json ]] &&
 	creds+=(--bind "$HOME/.config/cursor/auth.json"
 		"$HOME/.config/cursor/auth.json")
-[[ -f $HOME/.cursor/cli-config.json ]] &&
-	creds+=(--bind "$HOME/.cursor/cli-config.json"
-		"$HOME/.cursor/cli-config.json")
 [[ -f $HOME/.codex/auth.json ]] &&
 	creds+=(--bind "$HOME/.codex/auth.json" "$HOME/.codex/auth.json")
 [[ -f $HOME/.pi/agent/auth.json ]] &&
@@ -266,6 +266,25 @@ if [[ -d $HOME/.nvm/versions/node ]]; then
 			sort -V | tail -1)
 fi
 
+# Encode the path as a TOML string inside an inline table. Dots in a
+# repository name must not become separators in a CLI config key.
+codex_trust_config() {
+    local LC_ALL=C path=$1 quoted= char escaped code i
+    for ((i = 0; i < ${#path}; i++)); do
+        char=${path:i:1}
+        printf -v code '%d' "'$char"
+        if ((code < 32 || code == 127)); then
+            printf -v escaped '\\u%04x' "$code"
+            quoted+=$escaped
+        elif [[ $char == '"' || $char == '\' ]]; then
+            quoted+=\\$char
+        else
+            quoted+=$char
+        fi
+    done
+    printf 'projects={"%s"={trust_level="trusted"}}' "$quoted"
+}
+
 case "$agent" in
 	shell)
 		if ((${#extra[@]})); then
@@ -284,7 +303,8 @@ case "$agent" in
 	codex)
 		# YOLO: Codex's own sandbox cannot nest in bwrap; bwrap is the fence.
 		cmd=(~/.local/bin/codex \
-			--dangerously-bypass-approvals-and-sandbox "${extra[@]}")
+			--dangerously-bypass-approvals-and-sandbox \
+			--config "$(codex_trust_config "$repo")" "${extra[@]}")
 		;;
 	pi)
 		cmd=(pi "${extra[@]}")
@@ -353,6 +373,7 @@ exec bwrap \
 	--ro-bind-try "$HOME/.cargo/bin" "$HOME/.cargo/hostbin" \
 	--ro-bind-try "$HOME/.cursor/skills-cursor" "$HOME/.cursor/skills-cursor" \
 	--ro-bind-try "$HOME/.gitconfig" "$HOME/.gitconfig" \
+	"${configs[@]}" \
 	"${creds[@]}" \
 	"${tooling_mount[@]}" \
 	--bind "$repo" "$repo" \

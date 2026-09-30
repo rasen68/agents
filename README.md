@@ -18,6 +18,8 @@ We store local summaries and context, like what is usually in a project's `AGENT
 
 Start the sandbox with `sandbox {claude|cursor|codex|pi}`. You can also `sandbox shell` to act in the sandbox as yourself. Sandboxes are managed using `bubblewrap`/`bwrap` and bind the project (and necessary credential files for contacting model providers) as read-write with anything else the agent might need (toolchains, `agents/` itself, etc.) as read-only. Notably, `git` hooks and config are read-only to prevent malicious hooks. Sandbox homes are at `~/.agent-sandboxes/{basename}-{hash}`.
 
+Each sandbox binds each harness's settings/configs on launch so that they read from your home filesystem's configs.
+
 Note that we do not provide network isolation and that prompt injection is still possible. A prompted injection agent can, at worst, destroy local work and/or create dangerous code that a user might run unsandboxed. To protect against this, it's recommended you do your own command-line development within `sandbox shell`.
 
 The sandbox supplies paths and binaries that are useful to my own development. You can easily modify what it supplies by changing its `bwrap` arguments at the bottom of `bin/sandbox`.
