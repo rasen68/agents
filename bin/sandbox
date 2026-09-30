@@ -11,7 +11,7 @@ STATE_ROOT=${AGENT_SANDBOX_ROOT:-$HOME/.agent-sandboxes}
 
 usage() {
 	cat <<EOF
-Usage: sandbox {claude|cursor|codex|shell} [options] [-- agent args...]
+Usage: sandbox {claude|cursor|codex|pi|shell} [options] [-- agent args...]
 
 Options:
   -r, --repo DIR   Repo to expose read-write (default: git root of \$PWD)
@@ -36,6 +36,7 @@ while (($#)); do
 		claude) agent=claude ;;
 		cursor) agent=cursor ;;
 		codex) agent=codex ;;
+		pi) agent=pi ;;
 		shell) agent=shell ;;
 		-r|--repo) repo=${2:?missing repo}; shift ;;
 		-n|--name) name=${2:?missing name}; shift ;;
@@ -49,7 +50,7 @@ while (($#)); do
 done
 
 if [[ -z $agent ]]; then
-	echo "sandbox: need agent (claude|cursor|codex|shell)" >&2
+	echo "sandbox: need agent (claude|cursor|codex|pi|shell)" >&2
 	exit 1
 fi
 
@@ -187,7 +188,7 @@ seed_home() {
     local target parent
     for target in .agents/skills .cursor/skills .cursor/rules \
         .claude/skills .codex .local/bin .config .cache .local/share \
-        .npm-global/bin .cargo/bin; do
+        .npm-global/bin .cargo/bin .pi/agent/skills; do
         parent=$sbxhome/$target
         while [[ $parent == "$sbxhome"/* ]]; do
             if [[ -L $parent || ( -e $parent && ! -d $parent ) ]]; then
@@ -197,7 +198,8 @@ seed_home() {
             parent=$(dirname "$parent")
         done
     done
-    for target in .claude.json .claude/settings.json; do
+    for target in .claude.json .claude/settings.json \
+        .pi/agent/settings.json .pi/agent/models.json; do
         if [[ -L $sbxhome/$target ]]; then
             echo "sandbox: conflicting config: $target" >&2
             return 1
@@ -205,6 +207,13 @@ seed_home() {
     done
     link_home "$sbxhome" "$TOOLING"
     mkdir -p "$sbxhome"/{.config,.cache,.local/share,.npm-global/bin}
+
+    for target in settings.json models.json; do
+        if [[ ! -e $sbxhome/.pi/agent/$target && \
+            -f $HOME/.pi/agent/$target ]]; then
+            cp "$HOME/.pi/agent/$target" "$sbxhome/.pi/agent/$target"
+        fi
+    done
 
 	# CARGO_HOME is per-sandbox so `cargo install` and registry cache
 	# stay local, but rustup shims are 20M of identical binaries; link
@@ -240,6 +249,8 @@ creds=()
 		"$HOME/.cursor/cli-config.json")
 [[ -f $HOME/.codex/auth.json ]] &&
 	creds+=(--bind "$HOME/.codex/auth.json" "$HOME/.codex/auth.json")
+[[ -f $HOME/.pi/agent/auth.json ]] &&
+	creds+=(--bind "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/auth.json")
 
 # Resolve host nvm's default node so node/npm/npx land on PATH. The whole
 # ~/.nvm is bound read-only, so only its bin dir needs to be on PATH.
@@ -256,7 +267,7 @@ if [[ -d $HOME/.nvm/versions/node ]]; then
 fi
 
 case "$agent" in
-	shell) 
+	shell)
 		if ((${#extra[@]})); then
 			cmd=(bash --norc "${extra[@]}")
 		else
@@ -275,15 +286,19 @@ case "$agent" in
 		cmd=(~/.local/bin/codex \
 			--dangerously-bypass-approvals-and-sandbox "${extra[@]}")
 		;;
+	pi)
+		cmd=(pi "${extra[@]}")
+		;;
 	*)
-		echo "sandbox: agent $agent invalid, choose claude, cursor, codex, or shell" >&2
+		echo "sandbox: invalid agent: $agent" >&2
 		exit 1
 esac
 
 tooling_mount=(--ro-bind "$TOOLING" "$TOOLING")
 [[ $repo != "$TOOLING" ]] || tooling_mount=(--bind "$TOOLING" "$TOOLING")
 sandbox_path="$HOME/.npm-global/bin:${node_bin:+$node_bin:}"
-sandbox_path+="$HOME/.local/bin:$TOOLING/bin:$HOME/.cargo/bin"
+sandbox_path+=":$HOME/.local/bin:$TOOLING/bin:$HOME/.cargo/bin"
+sandbox_path+=":$HOME/.pi/agent/bin"
 sandbox_path+=":/usr/local/bin:/usr/bin:/bin"
 
 # No --new-session: it would detach the controlling tty and break Ctrl-C
@@ -329,6 +344,10 @@ exec bwrap \
 	--ro-bind-try "$HOME/.local/share/cursor-agent" \
 		"$HOME/.local/share/cursor-agent" \
 	--ro-bind-try "$HOME/.codex/packages" "$HOME/.codex/packages" \
+	--ro-bind-try "$HOME/.pi/agent/bin" "$HOME/.pi/agent/bin" \
+	--ro-bind-try "$HOME/.pi/agent/install" "$HOME/.pi/agent/install" \
+	--ro-bind-try "$HOME/.local/share/pi-node" \
+		"$HOME/.local/share/pi-node" \
 	--ro-bind-try "$HOME/.rustup" "$HOME/.rustup" \
 	--ro-bind-try "$HOME/.nvm" "$HOME/.nvm" \
 	--ro-bind-try "$HOME/.cargo/bin" "$HOME/.cargo/hostbin" \

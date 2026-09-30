@@ -23,3 +23,15 @@ if [[ -z $( command -v agent ) ]]; then
 else
 	echo "Cursor agent already installed!"
 fi
+
+if ! command -v pi >/dev/null 2>&1; then
+    echo 'Installing Pi...'
+    curl -fsSL https://pi.dev/install.sh | sh
+else
+    echo 'Pi already installed!'
+fi
+
+for package in pi-web-access pi-subagents pi-plans-mode pi-undo-redo \
+    @juicesharp/rpiv-todo @juicesharp/rpiv-ask-user-question; do
+    pi install "npm:$package"
+done

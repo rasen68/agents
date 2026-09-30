@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Personal agent profile
 
-Shared defaults for Cursor, Claude Code, and Codex. Project overlays under
+Shared defaults for Cursor, Claude Code, Codex, and Pi. Project overlays under
 `~/.agent-overlays/` override these defaults when more specific.
 
 ## Shared tooling and local overlays
