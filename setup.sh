@@ -31,7 +31,6 @@ link_home() {
         link_file "$skill" "$home/.agents/skills/${skill##*/}"
         link_file "$skill" "$home/.cursor/skills/${skill##*/}"
         link_file "$skill" "$home/.claude/skills/${skill##*/}"
-        link_file "$skill" "$home/.pi/agent/skills/${skill##*/}"
     done
 
     for command in "$tooling"/bin/*; do

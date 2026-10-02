@@ -196,7 +196,7 @@ instruction_files=(
     .agents/AGENTS.md .cursor/AGENTS.md .cursor/rules/AGENTS.mdc
     .claude/CLAUDE.md .codex/AGENTS.md .pi/agent/AGENTS.md
 )
-skill_dirs=(.agents/skills .cursor/skills .claude/skills .pi/agent/skills)
+skill_dirs=(.agents/skills .cursor/skills .claude/skills)
 
 seed_home() {
     # A reused home is writable by the agent. Check parents before any
@@ -230,7 +230,7 @@ seed_home() {
             rm -- "$sbxhome/$target"
         fi
     done
-    for dir in "${skill_dirs[@]}" .local/bin; do
+    for dir in "${skill_dirs[@]}" .pi/agent/skills .local/bin; do
         source=$TOOLING/skills
         [[ $dir != .local/bin ]] || source=$TOOLING/bin
         for target in "$sbxhome/$dir"/*; do

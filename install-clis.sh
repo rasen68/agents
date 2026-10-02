@@ -31,8 +31,18 @@ else
     echo 'Pi already installed!'
 fi
 
-for package in pi-web-access pi-subagents pi-plans-mode pi-undo-redo \
-    @juicesharp/rpiv-todo @juicesharp/rpiv-ask-user-question; do
+packages=(
+	pi-web-access
+	pi-subagents
+	pi-undo-redo
+	pi-btw
+	pi-claude-bridge
+	pi-cursor-provider
+	@juicesharp/rpiv-todo
+	@juicesharp/rpiv-ask-user-question
+)
+
+for package in ${packages[@]}; do
     pi install "npm:$package" || exit "$?"
 done
 
