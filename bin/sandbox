@@ -404,7 +404,7 @@ s = socket.socket(socket.AF_UNIX)
 s.settimeout(0.2)
 s.connect(sys.argv[1])" "$socket" 2>/dev/null; then
                     ~/.local/bin/codex --remote "unix://$socket" \
-                        --dangerously-bypass-approvals-and-sandbox "$@"
+                        "$@"
                     exit
                 fi
                 sleep 0.1
