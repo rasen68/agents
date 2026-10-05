@@ -7,6 +7,7 @@ set -euo pipefail
 
 TOOLING=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 STATE_ROOT=${AGENT_SANDBOX_ROOT:-$HOME/.agent-sandboxes}
+NETWORK_ROOT=${AGENT_NETWORK_ROOT:-$HOME/.local/state/agent-network}
 
 usage() {
 	cat <<EOF
@@ -17,6 +18,7 @@ Options:
   -n, --name NAME  Sandbox state name (default: basename + root hash)
       --reset      Delete this sandbox's saved home before starting
       --list       List existing sandboxes and exit
+      --provider-host HOST  Allow an exact provider HTTPS tunnel (repeatable)
   -h, --help       Show this help
 
 The sandbox home persists at $STATE_ROOT/<name>/home so venvs, caches
@@ -29,6 +31,7 @@ repo=
 name=
 reset=0
 extra=()
+provider_hosts=()
 
 while (($#)); do
 	case $1 in
@@ -40,6 +43,7 @@ while (($#)); do
 		-r|--repo) repo=${2:?missing repo}; shift ;;
 		-n|--name) name=${2:?missing name}; shift ;;
 		--reset) reset=1 ;;
+		--provider-host) provider_hosts+=("${2:?missing provider hostname}"); shift ;;
 		--list) ls -1 "$STATE_ROOT" 2>/dev/null; exit 0 ;;
 		-h|--help) usage; exit 0 ;;
 		--) shift; extra=("$@"); break ;;
@@ -178,6 +182,50 @@ mkdir -p "$sbxhome"
 printf '%s' "$repo" > "$sbx/project"
 overlay=$("$TOOLING/bin/agent-overlay" init "$repo")
 
+# The administration socket and policy must never be in an agent-writable
+# mount. Reject symlink aliases before the host creates anything there.
+network_root=$(realpath -m -s -- "$NETWORK_ROOT")
+if [[ $network_root != "$(realpath -m -- "$NETWORK_ROOT")" ]]; then
+    echo 'sandbox: network storage must not use symlinks' >&2
+    exit 1
+fi
+case $network_root in
+    /|/usr|/etc|/var|/tmp|/run|/home|"$HOME")
+        echo 'sandbox: network storage must be a dedicated directory' >&2
+        exit 1 ;;
+esac
+# Check resolved mount sources too: Cargo is exposed under a second path,
+# and host symlinks can otherwise expose the administration socket by alias.
+network_protected=(
+    "$repo" "$TOOLING" "$STATE_ROOT" "$overlay"
+    "${git_dir:-}" "${git_common:-}" /usr /etc /sys /opt /var
+    "$HOME/.local/bin" "$HOME/.local/lib" "$HOME/.local/share/pipx"
+    "$HOME/.local/share/claude" "$HOME/.local/share/cursor-agent"
+    "$HOME/.codex/packages" "$HOME/.pi/agent/bin" "$HOME/.pi/agent/install"
+    "$HOME/.local/share/pi-node" "$HOME/.rustup" "$HOME/.nvm"
+    "$HOME/.cargo/bin" "$HOME/.cursor/skills-cursor" "$HOME/.gitconfig"
+    "$HOME/.claude/.credentials.json" "$HOME/.config/cursor/auth.json"
+    "$HOME/.codex/auth.json" "$HOME/.pi/agent/auth.json"
+)
+for protected in "${network_protected[@]}"; do
+    [[ -n $protected ]] || continue
+    protected=$(realpath -m -- "$protected")
+    if [[ $network_root == "$protected" || $network_root == "$protected"/* || \
+          $protected == "$network_root"/* ]]; then
+        echo "sandbox: network storage overlaps protected mount: $protected" >&2
+        exit 1
+    fi
+done
+if [[ $HOME == "$network_root"/* ]]; then
+    echo 'sandbox: network storage contains the host home' >&2
+    exit 1
+fi
+network_runtime=$network_root/$name
+if [[ -L $network_runtime ]]; then
+    echo 'sandbox: network runtime must not be a symlink' >&2
+    exit 1
+fi
+
 # Keep preferences shared while sessions and caches stay per-sandbox.
 config_files=(
     .claude.json .claude/settings.json .claude/settings.local.json
@@ -188,6 +236,15 @@ config_files=(
 )
 for profile in "$HOME"/.codex/*.config.toml; do
     [[ -f $profile ]] && config_files+=("${profile#"$HOME"/}")
+done
+
+for target in "${config_files[@]}"; do
+    protected=$(realpath -m -- "$HOME/$target")
+    if [[ $network_root == "$protected" || $network_root == "$protected"/* ||
+          $protected == "$network_root"/* ]]; then
+        echo "sandbox: network storage overlaps protected mount: $protected" >&2
+        exit 1
+    fi
 done
 
 instruction_files=(
@@ -372,10 +429,67 @@ sandbox_path+=":$HOME/.local/bin:$TOOLING/bin:$HOME/.cargo/bin"
 sandbox_path+=":$HOME/.cargo/hostbin:$HOME/.pi/agent/bin"
 sandbox_path+=":/usr/local/bin:/usr/bin:/bin"
 
+# Provider tunnels carry TLS unchanged. They are intentionally separate
+# from HTTP grants, which inspect methods and exact URLs at the broker.
+case $agent in
+    codex) provider_hosts+=(api.openai.com chatgpt.com auth.openai.com) ;;
+    claude) provider_hosts+=(api.anthropic.com platform.claude.com) ;;
+    cursor) provider_hosts+=(api2.cursor.sh api5.cursor.sh) ;;
+esac
+network_args=()
+for host in "${provider_hosts[@]}"; do
+    network_args+=(--provider "$host")
+done
+umask 077
+mkdir -p "$network_root"
+if [[ $(stat -c %u "$network_root") != "$(id -u)" || \
+      $(stat -c %a "$network_root") != 700 ]]; then
+    echo 'sandbox: network storage must be owned by you with mode 700' >&2
+    exit 1
+fi
+network_log=$(mktemp "$network_root/startup.XXXXXXXX.log")
+network_pid=
+sandbox_pid=
+cleanup_network() {
+    if [[ -n $sandbox_pid ]]; then
+        kill "$sandbox_pid" 2>/dev/null || :
+        wait "$sandbox_pid" 2>/dev/null || :
+    fi
+    if [[ -n $network_pid ]]; then
+        kill "$network_pid" 2>/dev/null || :
+        wait "$network_pid" 2>/dev/null || :
+    fi
+    rm -f -- "$network_log"
+}
+trap cleanup_network EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+python3 "$TOOLING/lib/sandbox_network.py" serve \
+    --runtime "$network_runtime" "${network_args[@]}" \
+    >"$network_log" 2>&1 &
+network_pid=$!
+network_ready=0
+for ((i = 0; i < 100; i++)); do
+    kill -0 "$network_pid" 2>/dev/null || break
+    if [[ -S $network_runtime/request.sock && -S $network_runtime/admin.sock ]] &&
+        [[ $(cat "$network_log") == ready ]]; then
+        network_ready=1
+        break
+    fi
+    sleep 0.1
+done
+if (( ! network_ready )); then
+    cat "$network_log" >&2
+    echo 'sandbox: network gateway did not become ready' >&2
+    exit 1
+fi
+
 # No --new-session: it would detach the controlling tty and break Ctrl-C
 # in the agent TUI. The TIOCSTI injection it guards against is compiled
 # out of this kernel (no dev.tty.legacy_tiocsti sysctl).
-exec bwrap \
+status=0
+bwrap \
 	--clearenv \
 	--setenv HOME "$HOME" \
 	--setenv USER "${USER:-$(id -un)}" \
@@ -390,7 +504,8 @@ exec bwrap \
 	--setenv CARGO_HOME "$HOME/.cargo" \
 	--setenv RUSTUP_HOME "$HOME/.rustup" \
 	--setenv AGENT_SANDBOX "$name" \
-	--unshare-all --share-net \
+	--setenv AGENT_NETWORK_SOCKET /run/agent-network.sock \
+	--unshare-all \
 	--die-with-parent \
 	--proc /proc \
 	--dev /dev \
@@ -433,5 +548,12 @@ exec bwrap \
 	--tmpfs "$HOME/.agent-overlays" \
 	--bind "$overlay" "$overlay" \
 	--remount-ro "$HOME/.agent-overlays" \
+	--tmpfs "$network_root" \
+	--ro-bind "$network_runtime/request.sock" /run/agent-network.sock \
 	--chdir "$repo" \
-	-- "${cmd[@]}"
+	-- python3 "$TOOLING/lib/sandbox_network.py" \
+    relay --socket /run/agent-network.sock -- "${cmd[@]}" <&0 &
+sandbox_pid=$!
+wait "$sandbox_pid" || status=$?
+sandbox_pid=
+exit "$status"
