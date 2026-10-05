@@ -52,8 +52,6 @@ if [[ -z $agent ]]; then
 	echo "sandbox: need agent (claude|cursor|codex|pi|shell)" >&2
 	exit 1
 fi
-
-
 if [[ -z $repo ]]; then
 	repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 fi
@@ -331,11 +329,34 @@ case "$agent" in
 			--sandbox disabled "${extra[@]}")
 		;;
 	codex)
-		# YOLO: Codex's own sandbox cannot nest in bwrap; bwrap is the fence.
-		cmd=(~/.local/bin/codex \
-			--dangerously-bypass-approvals-and-sandbox \
-			--config "$(codex_trust_config "$repo")" "${extra[@]}")
-		;;
+        # Both processes share this sandbox's private /tmp and lifetime.
+        cmd=(bash -euc '
+            socket=/tmp/codex.sock
+            ~/.local/bin/codex app-server --listen "unix://$socket" \
+                --config "$1" \
+                --config "sandbox_mode=\"danger-full-access\"" \
+                --config "approval_policy=\"never\"" \
+                >/tmp/codex.log 2>&1 &
+            server=$!
+            trap "kill $server 2>/dev/null || :; wait $server || :" EXIT
+            shift
+            for ((i = 0; i < 100; i++)); do
+                kill -0 "$server" 2>/dev/null || break
+                if python3 -c "import socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.settimeout(0.2)
+s.connect(sys.argv[1])" "$socket" 2>/dev/null; then
+                    ~/.local/bin/codex --remote "unix://$socket" \
+                        --dangerously-bypass-approvals-and-sandbox "$@"
+                    exit
+                fi
+                sleep 0.1
+            done
+            cat /tmp/codex.log >&2
+            echo "sandbox: Codex server did not become ready" >&2
+            exit 1
+        ' sandbox-codex "$(codex_trust_config "$repo")" "${extra[@]}")
+        ;;
 	pi)
 		cmd=(pi "${extra[@]}")
 		;;
