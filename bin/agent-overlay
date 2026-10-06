@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# != 2 || ! $1 =~ ^(resolve|init)$ ]]; then
-    echo 'Usage: agent-overlay resolve|init PROJECT_ROOT' >&2
+if [[ $# != 2 || ! $1 =~ ^(resolve|init|drift|snapshot)$ ]]; then
+    echo 'Usage: agent-overlay resolve|init|drift|snapshot PROJECT_ROOT' >&2
     exit 2
 fi
 
@@ -33,4 +33,110 @@ elif [[ ! -d $overlay ]]; then
     exit 1
 fi
 
-printf '%s\n' "$overlay"
+if [[ $1 == resolve || $1 == init ]]; then
+    printf '%s\n' "$overlay"
+    exit 0
+fi
+
+fail() {
+    echo "agent-overlay: $*" >&2
+    exit 2
+}
+
+trap 'fail "inspection failed; baseline unchanged"' ERR
+export LC_ALL=C
+for dependency in git jq sha256sum stat readlink sort mktemp; do
+    command -v "$dependency" >/dev/null || fail "missing dependency: $dependency"
+done
+[[ $(git -C "$root" rev-parse --is-inside-work-tree) == true ]] ||
+    fail 'drift and snapshot require a Git working tree'
+
+state=$overlay/state
+baseline=$state/project-snapshot.json
+[[ ! -L $state && ! -L $baseline ]] || fail 'snapshot state must not be symlinked'
+if [[ $1 == drift && ! -f $baseline ]]; then
+    fail 'no baseline; review the project, then run agent-overlay snapshot'
+fi
+
+if [[ $1 == snapshot ]]; then
+    command -v flock >/dev/null || fail 'missing dependency: flock'
+    mkdir -p -- "$state"
+    [[ ! -L $state/snapshot.lock ]] || fail 'snapshot lock must not be symlinked'
+    exec {lock_fd}>>"$state/snapshot.lock"
+    flock -n "$lock_fd" || fail 'another snapshot writer is active'
+    scratch=$(mktemp -d "$state/.snapshot.XXXXXX")
+else
+    scratch=$(mktemp -d)
+fi
+trap 'rm -rf -- "$scratch"' EXIT
+trap 'exit 2' HUP INT TERM
+
+collect_manifest() {
+    local path parent before after hash mode target head
+    git -C "$root" ls-files --cached --others --exclude-standard -z -- . |
+        sort -zu > "$scratch/paths"
+    : > "$scratch/entries"
+    while IFS= read -r -d '' path; do
+        parent=$path
+        while [[ $parent == */* ]]; do
+            parent=${parent%/*}
+            [[ ! -L $root/$parent ]] || fail "symlinked parent directory: $parent"
+        done
+        # Tracked paths remain in ls-files after deletion from the working tree.
+        [[ -e $root/$path || -L $root/$path ]] || continue
+        before=$(stat -c '%d:%i:%s:%y:%z:%f' -- "$root/$path")
+        if [[ -L $root/$path ]]; then
+            readlink -z -- "$root/$path" > "$scratch/target"
+            IFS= read -r -d '' target < "$scratch/target"
+            jq -cn --arg path "$path" --arg target "$target" \
+                '{key: $path, value: {type: "symlink", target: $target}}'
+        elif [[ -f $root/$path ]]; then
+            hash=$(sha256sum < "$root/$path")
+            mode=$(stat -c '%a' -- "$root/$path")
+            jq -cn --arg path "$path" --arg hash "${hash%% *}" \
+                --argjson executable "$(( (8#$mode & 0111) != 0 ))" \
+                '{key: $path, value: {type: "file", sha256: $hash,
+                  executable: ($executable == 1)}}'
+        else
+            fail "unsupported file type (including submodules): $path"
+        fi >> "$scratch/entries"
+        after=$(stat -c '%d:%i:%s:%y:%z:%f' -- "$root/$path")
+        [[ $before == "$after" ]] || fail "file changed during inspection: $path"
+    done < "$scratch/paths"
+    head=$(git -C "$root" rev-parse --verify HEAD 2>/dev/null) || head=''
+    jq -sS --arg root "$root" --arg head "$head" \
+        '{version: 1, root: $root, head: (if $head == "" then null else $head end),
+          files: from_entries}' "$scratch/entries" > "$scratch/manifest"
+}
+
+if [[ $1 == drift ]]; then
+    jq -e --arg root "$root" '
+        type == "object" and .version == 1 and .root == $root and
+        (.files | type == "object") and
+        (.files | to_entries | all(.[];
+            (.value | type == "object") and
+            (if .value.type == "file" then
+                (.value.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+                (.value.executable | type == "boolean")
+             elif .value.type == "symlink" then (.value.target | type == "string")
+             else false end)))
+    ' "$baseline" >/dev/null || fail 'invalid baseline version, root, or contents'
+fi
+
+collect_manifest
+if [[ $1 == snapshot ]]; then
+    mv -f -- "$scratch/manifest" "$baseline"
+    printf 'Snapshot saved: %s\n' "$baseline"
+else
+    jq -sr '
+        .[0].files as $old | .[1].files as $new |
+        ($old + $new | keys[]) as $path |
+        (if ($old | has($path) | not) then "Added"
+         elif ($new | has($path) | not) then "Deleted"
+         elif $old[$path] != $new[$path] then "Modified"
+         else empty end) as $change |
+        "\($change): \($path | if test("[\\x00-\\x1f\\x7f]") then tojson else . end)"
+    ' "$baseline" "$scratch/manifest" > "$scratch/changes"
+    cat "$scratch/changes"
+    [[ ! -s $scratch/changes ]] || exit 1
+fi
