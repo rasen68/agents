@@ -28,10 +28,10 @@ Note that agents are mostly run inside of `bubblewrap`ped sandboxes with read-on
 ## Early vs continuous work
 
 **Early (idea / design):**
-- Prefer `/grill-me`. Do not write production code until the user approves
+- Use `/grill-to-spec` to resolve design decisions and write a spec into the
+  overlay's `plans/`. Do not write production code until the user approves
   and says implement/fix/apply.
-- Builds that span sessions: `/to-spec` into the overlay's `plans/`;
-  `/handoff` when switching threads mid-work.
+- Use `/handoff` when switching threads mid-work.
 - Record all decisions and their reasons in the overlay.
 
 **Continuous implementation (after explicit go-ahead):**

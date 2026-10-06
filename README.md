@@ -8,7 +8,7 @@ Install agent CLIs with `install-clis.sh`. `setup.sh` then creates symlinks from
 
 ## Skills & workflows
 
-A global `AGENTS.md` is symlinked to everywhere Claude/Cursor/Codex/Pi look and provides my preferences. Skills define a basic workflow of `/init` to establish context, `/grill-me` to brainstorm, `/to-spec` and `/handoff` to create plan documents, and `/spec-review` to review implemented code.
+A global `AGENTS.md` is symlinked to everywhere Claude/Cursor/Codex/Pi look and provides my preferences. Skills define a basic workflow of `/init` to establish context, `/grill-to-spec` to resolve design decisions and write a spec, `/handoff` to create handoff documents, and `/spec-review` to review implemented code.
 
 ## Project overlays
 
