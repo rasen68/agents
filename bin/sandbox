@@ -472,7 +472,7 @@ network_pid=$!
 network_ready=0
 for ((i = 0; i < 100; i++)); do
     kill -0 "$network_pid" 2>/dev/null || break
-    if [[ -S $network_runtime/request.sock && -S $network_runtime/admin.sock ]] &&
+    if [[ -S $network_runtime/request.sock && -S $network_runtime/admin.sock && -S $network_runtime/route.sock ]] &&
         [[ $(cat "$network_log") == ready ]]; then
         network_ready=1
         break
@@ -489,7 +489,9 @@ fi
 # in the agent TUI. The TIOCSTI injection it guards against is compiled
 # out of this kernel (no dev.tty.legacy_tiocsti sysctl).
 status=0
-bwrap \
+unshare --user --map-root-user --net -- \
+    python3 -B "$TOOLING/lib/sandbox_routing.py" --socket "$network_runtime/route.sock" -- \
+    bwrap \
 	--clearenv \
 	--setenv HOME "$HOME" \
 	--setenv USER "${USER:-$(id -un)}" \
@@ -506,6 +508,9 @@ bwrap \
 	--setenv AGENT_SANDBOX "$name" \
 	--setenv AGENT_NETWORK_SOCKET /run/agent-network.sock \
 	--unshare-all \
+	--share-net \
+	--uid "$(id -u)" \
+	--gid "$(id -g)" \
 	--die-with-parent \
 	--proc /proc \
 	--dev /dev \
