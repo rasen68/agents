@@ -17,13 +17,12 @@ Write text without AI patterns or edit to remove them.
 
 ### Language
 
-- **AI vocabulary.** Additionally, crucial, delve, enduring, enhance, fostering, garner, interplay, intricate, landscape (abstract), pivotal, showcase, tapestry (abstract), testament, underscore, vibrant, load-bearing, footgun, seam. Replace with plain words.
+- **AI vocabulary.** Additionally, crucial, delve, enduring, enhance, fostering, garner, interplay, intricate, landscape (abstract), pivotal, showcase, tapestry (abstract), testament, underscore, vibrant, load-bearing, footgun, blast radius, belt-and-suspenders. Replace with plain words.
 - **Fancy ways to say "is".** "serves as", "stands as", "boasts", "features". Just say "is" or "has".
 - **"Not just X, but Y."** State the point directly instead.
 - **Rule of three.** Forcing ideas into groups of three. Use the natural number.
 - **Synonym cycling.** Protagonist, main character, central figure, hero all in one paragraph. Pick one, repeat it.
 - **False ranges.** "from X to Y" where X and Y aren't on a meaningful scale. List topics directly.
-- **Noun phrase-only sentences.** "Cleaner code, better performance". Replace with a full, natural sentence.
 
 ### Style
 
@@ -34,6 +33,7 @@ Write text without AI patterns or edit to remove them.
 - **Title case headings.** Use sentence case.
 - **Decorative emojis.** Remove from headings and bullets.
 - **Curly quotes.** Replace with straight quotes.
+- **Contraction avoidance.** Use contractions.
 
 ### Communication artifacts
 
@@ -55,9 +55,10 @@ Write text without AI patterns or edit to remove them.
 ### Plain speech
 
 - **Say what it does, not how it feels.** "the database stays close at hand", "SQL you can read", "types that follow your schema" name a feeling. The fix names the mechanism or a number: "`.toSQL()` returns the exact string sent to the database", "a column rename fails the build". Ask what the sentence tells the reader to do or know, then write that. If you can't restate it as a concrete instruction, fact, or number, cut it. One more check: if the sentence could appear unchanged in another project's docs, it says nothing about this one. Cut it.
-- **Shorten or split dense sentences.** If the reader has to backtrack to parse a sentence, break it in two or drop clauses. One idea per sentence.
 - **Active voice.** Prefer it. Catch "is/are/was/were + past participle" and name the actor: "queries are validated" becomes "the compiler validates queries", "the file is parsed by the loader" becomes "the loader parses the file". Passive is fine only when the actor is unknown or genuinely doesn't matter.
 - **Cut adverbs, or use a stronger verb.** "runs quickly" becomes "is fast" or the number. "significantly improves" becomes the measured delta. An adverb propping up a weak verb means the verb is wrong.
 - **Prefer the plain word.** "utilize" becomes "use", "leverage" becomes "use", "facilitate" becomes "help", "numerous" becomes "many", "in the event that" becomes "if". The fancier synonym is rarely clearer.
 - **Mannered prose.** Metaphor or flourish where a literal phrase exists: aphorisms ("wire it or delete it"), rhetorical fragments for effect, personified code ("the plan holds it"), figurative verbs ("rides along", "stands on"), stock framing phrases. "A dial worth turning" becomes "a parameter worth varying". Say what you mean. Rule 26 covers the metaphor nouns.
 - **Over-compression.** Dropped articles, verbless fragments, symbol-speak, and abbreviations that make the reader decode instead of read. "Parser rejects bad date → exit 2, no write" becomes "The parser rejects a bad date, exits with code 2, and writes nothing." Write whole sentences with their articles and verbs, and spell out arrows and abbreviations.
+- **Noun phrase-only sentences.** "Cleaner code, better performance". Replace with a full, natural sentence.
+- **Unnecessary sentence breaks.** "What happened was X. That is Y." Combine up to two related ideas into a single sentence with a logical separator.
