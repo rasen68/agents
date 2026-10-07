@@ -23,6 +23,8 @@ Write text without AI patterns or edit to remove them.
 - **Rule of three.** Forcing ideas into groups of three. Use the natural number.
 - **Synonym cycling.** Protagonist, main character, central figure, hero all in one paragraph. Pick one, repeat it.
 - **False ranges.** "from X to Y" where X and Y aren't on a meaningful scale. List topics directly.
+- **No-op statements.** "I did not push to prod." Of course you didn't, no need to say that. Mention it only if something was explicitly *unverified*.
+- **Verification pandering.** "I checked rather than just assuming." Correct, but the user does not need to hear this. Just say that you checked, and, if relevant, what you found.
 
 ### Style
 

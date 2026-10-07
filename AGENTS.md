@@ -20,8 +20,9 @@ The overlay should let a fresh agent understand the current project, explain con
 
 - At startup, read the overlay's `AGENTS.md`, `CONTEXT.md`, `rules/`, and `plans/README.md` if present, and inspect changes since the last recorded state. Reconcile material differences with current facts, and record unexplained changes as just observations.
 - Keep `AGENTS.md` and `CONTEXT.md` current. Preserve historical changes in `CHANGES.md`, and decisions with their reasons, evidence, and considered alternatives in `plans/decisions.md`. Mark corrected or superseded decisions.
-- Keep `plans/README.md` as a short index of decisions, active work, experiments, and reusable artifacts. Write specs, plans, handoffs, and research to `plans/`.
-- Save useful scripts, checks, and required supporting files in the overlay, with enough instructions to run them again. Do not leave their only copy in temporary storage. Scripts specifically go in `scripts/`
+- Keep `plans/README.md` as a short index of decisions, active work, experiments, and reusable artifacts. Write explicit specs and plans to `plans/`.
+- When doing research, handing off conversations, or gleaning information about the user's intent that's meaningful but not enough to write a full spec, write it to `notes/`. If you see information that's in `plans/` or `CONTEXT.md` that should be in `notes/` instead, move it.
+- Save useful scripts, checks, and required supporting files in the overlay, with enough instructions to run them again. Do not leave their only copy in temporary storage. Scripts specifically go in `scripts/`.
 - Record meaningful decisions and findings when they occur. Include verification commands, results, and what remains unverified. Cite primary sources in substantial research notes. Skip routine activity that will not help future work.
 - Use subagents to parallelize independent inspection and substantial drafting when useful, preferably at Low reasoning. Assign one writer per shared file; the primary agent reconciles findings and checks claims.
 
@@ -53,8 +54,8 @@ The overlay should let a fresh agent understand the current project, explain con
 
 - Concise; no filler.
 - When recommending a library, data structure, or framework that is not the only/obvious choice: give alternatives and why you prefer one.
-- Research answers: summarize in chat.
 - When the user asked for prose (e.g. answering a question, writing a spec) or when delivering a nontrivial report (e.g. explaining a large implementation), use `/unslop` for better writing. Do not mention that you are using it, just do it.
+- When verifying, claim that relevant project-scoped tests pass, but if you run lints or checks such as `git diff --check`, do not tell the user this. Keep responses to project-scoped details the user cares about.
 
 ## Sandbox network access
 
