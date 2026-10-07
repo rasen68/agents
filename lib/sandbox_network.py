@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Host network broker and sandbox proxy relay."""
 import argparse
-import base64
 import collections
 import fcntl
-import http.client
 import http.server
 import ipaddress
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -16,7 +13,6 @@ import select
 import signal
 import socket
 import socketserver
-import ssl
 import struct
 import subprocess
 import sys
@@ -25,9 +21,7 @@ import time
 import urllib.parse
 import uuid
 
-MAX_BODY = 16 * 1024 * 1024
 MAX_FRAME = 24 * 1024 * 1024
-METHODS = {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'}
 
 
 def hostname(value):
@@ -49,38 +43,6 @@ def endpoint_host(value):
         return hostname(value)
 
 
-def parse_url(value):
-    if not isinstance(value, str) or any(ord(c) <= 32 or ord(c) >= 127 for c in value):
-        raise ValueError('URL must be ASCII without whitespace or control characters')
-    u = urllib.parse.urlsplit(value)
-    if u.scheme not in ('http', 'https') or not u.hostname or u.username is not None or '#' in value:
-        raise ValueError('expected HTTP(S) URL without credentials or fragment')
-    host = u.hostname.lower()
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        hostname(host)
-    port = u.port if u.port is not None else (443 if u.scheme == 'https' else 80)
-    if not 1 <= port <= 65535:
-        raise ValueError('invalid port')
-    path = u.path or '/'
-    # Reject routing ambiguity rather than guess how an upstream decodes it.
-    if '\\' in value or re.search(r'%(?![0-9a-fA-F]{2})', value):
-        raise ValueError('invalid URL escape')
-    decoded = urllib.parse.unquote(path)
-    if ('%' in decoded or '\\' in decoded or any(ord(c) < 32 or ord(c) == 127 for c in decoded)
-            or re.search(r'%2f', path, re.I) or any(p in ('.', '..') for p in decoded.split('/'))):
-        raise ValueError('ambiguous URL path')
-    authority = f'[{host}]' if ':' in host else host
-    if port != (443 if u.scheme == 'https' else 80):
-        authority += f':{port}'
-    return urllib.parse.urlsplit(urllib.parse.urlunsplit((u.scheme, authority, path, u.query, '')))
-
-
-def origin(u):
-    return u.scheme, u.hostname, u.port or (443 if u.scheme == 'https' else 80)
-
-
 class Policy:
     def __init__(self, providers, routing_required=False):
         self.providers = {hostname(h) for h in providers}
@@ -92,30 +54,10 @@ class Policy:
         self.routers = {}
         self.routing_required = routing_required
 
-    def add(self, url, method, ttl, requests, prefix, any_query, private):
-        u = parse_url(url)
-        if method not in METHODS or not isinstance(ttl, (float, int)) or not math.isfinite(ttl) or ttl <= 0:
-            raise ValueError('method and positive finite TTL required')
-        if type(requests) is not int or requests <= 0:
-            raise ValueError('positive finite request count required')
-        if any(type(v) is not bool for v in (prefix, any_query, private)):
-            raise ValueError('scope flags must be booleans')
-        grant = dict(id=uuid.uuid4().hex[:12], url=u.geturl(), method=method,
-                     expires=time.time() + ttl, remaining=requests, prefix=prefix,
-                     any_query=any_query, private=private)
-        grant['_deadline'] = time.monotonic() + ttl
-        with self.lock:
-            self.grants[grant['id']] = grant
-            self.revision += 1
-            self.changed.notify_all()
-        return {k: v for k, v in grant.items() if not k.startswith('_')}
-
-    def add_host(self, host, port, ttl, connections, private):
+    def add_host(self, host, port, connections, private):
         host = endpoint_host(host)
         if type(port) is not int or not 1 <= port <= 65535:
             raise ValueError('port must be between 1 and 65535')
-        if type(ttl) not in (int, float) or not math.isfinite(ttl) or ttl <= 0:
-            raise ValueError('positive finite TTL required')
         if connections is not None and (type(connections) is not int or connections <= 0):
             raise ValueError('positive connection count required')
         if type(private) is not bool:
@@ -131,34 +73,12 @@ class Policy:
                 or host == '127.0.0.53' and port == 53):
             raise ValueError('destination is reserved for sandbox DNS routing')
         grant = dict(id=uuid.uuid4().hex[:12], kind='host', host=host, port=port,
-                     expires=time.time() + ttl, remaining=connections, private=private,
-                     _deadline=time.monotonic() + ttl)
+                     remaining=connections, private=private)
         with self.lock:
             self.grants[grant['id']] = grant
             self.revision += 1
             self.changed.notify_all()
-        return {k: v for k, v in grant.items() if not k.startswith('_')}
-
-    def matching(self, method, u, private):
-        for g in self.grants.values():
-            if g.get('kind') == 'host':
-                continue
-            allowed = parse_url(g['url'])
-            path_ok = u.path == allowed.path or (g['prefix'] and u.path.startswith(allowed.path.rstrip('/') + '/'))
-            if (g['_deadline'] > time.monotonic() and g['remaining'] > 0 and g['method'] == method
-                    and origin(allowed) == origin(u) and path_ok
-                    and (g['any_query'] or u.query == allowed.query) and (not private or g['private'])):
-                return g
-        return None
-
-    def authorize(self, method, u, private):
-        with self.lock:
-            grant = self.matching(method, u, private)
-            if grant:
-                grant['remaining'] -= 1
-                return grant['id']
-            self.denials.append(dict(time=time.time(), method=method, url=u.geturl(), private=private))
-            return None
+        return grant.copy()
 
     def provider_allowed(self, host, port):
         return host in self.providers and port == 443
@@ -170,8 +90,7 @@ class Policy:
     def _endpoints(self):
         endpoints = {(host, 443) for host in self.providers}
         endpoints.update((g['host'], g['port']) for g in self.grants.values()
-                         if g.get('kind') == 'host' and g['_deadline'] > time.monotonic()
-                         and (g['remaining'] is None or g['remaining'] > 0))
+                         if g['remaining'] is None or g['remaining'] > 0)
         return [dict(host=host, port=port) for host, port in sorted(endpoints)]
 
     def wait_for_routes(self):
@@ -188,8 +107,7 @@ class Policy:
             if self.provider_allowed(host, port) and not private:
                 return 'provider'
             for g in self.grants.values():
-                if (g.get('kind') == 'host' and g['host'] == host and g['port'] == port
-                        and g['_deadline'] > time.monotonic()
+                if (g['host'] == host and g['port'] == port
                         and (g['remaining'] is None or g['remaining'] > 0)
                         and (not private or g['private'])):
                     if consume and g['remaining'] is not None:
@@ -203,7 +121,7 @@ class Policy:
         with self.lock:
             if op == 'list':
                 return dict(providers=sorted(self.providers), grants=[
-                    {k: v for k, v in g.items() if not k.startswith('_')} for g in self.grants.values()])
+                    g.copy() for g in self.grants.values()])
             if op == 'denied':
                 return list(self.denials)
         raise ValueError('unknown inspection operation')
@@ -211,11 +129,8 @@ class Policy:
     def admin(self, msg):
         op = msg['op']
         if op == 'allow':
-            if 'host' in msg:
-                return self.add_host(msg['host'], msg['port'], msg['ttl'],
-                                     msg.get('connections'), msg['private'])
-            return self.add(msg['url'], msg['method'], msg['ttl'], msg['requests'],
-                            msg['prefix'], msg['any_query'], msg['private'])
+            return self.add_host(msg['host'], msg['port'],
+                                 msg.get('connections'), msg['private'])
         with self.lock:
             if op == 'revoke':
                 revoked = self.grants.pop(msg['id'], None) is not None
@@ -245,48 +160,6 @@ def connect_pinned(addresses):
             last = e
             s.close()
     raise last
-
-
-def fetch(policy, msg):
-    u = parse_url(msg['url'])
-    method = msg['method']
-    if method not in METHODS:
-        raise ValueError('unsupported method')
-    body = base64.b64decode(msg.get('body', ''), validate=True)
-    if len(body) > MAX_BODY:
-        raise ValueError('body exceeds 16 MiB')
-    headers = msg.get('headers', {})
-    if not isinstance(headers, dict):
-        raise ValueError('headers must be an object')
-    forbidden = {'host', 'connection', 'proxy-connection', 'proxy-authorization', 'transfer-encoding',
-                 'content-length', 'upgrade', 'te', 'trailer', 'expect'}
-    for key, value in headers.items():
-        if (not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", key) or key.lower() in forbidden
-                or not isinstance(value, str) or any(ord(c) < 32 or ord(c) > 126 for c in value)):
-            raise ValueError('invalid or reserved HTTP header')
-    # Do not perform DNS work for a request without a matching scope.
-    with policy.lock:
-        candidate = policy.matching(method, u, False)
-    if not candidate:
-        policy.authorize(method, u, False)
-        raise PermissionError('request denied; ask host for a scoped sandbox-net allow grant')
-    addresses, private = resolve(u.hostname, origin(u)[2])
-    if not policy.authorize(method, u, private):
-        raise PermissionError('request denied, including private destination policy')
-    conn = http.client.HTTPConnection(u.hostname, origin(u)[2], timeout=30)
-    conn.sock = connect_pinned(addresses)
-    try:
-        if u.scheme == 'https':
-            conn.sock = ssl.create_default_context().wrap_socket(conn.sock, server_hostname=u.hostname)
-        target = u.path + ('?' + u.query if u.query else '')
-        conn.request(method, target, body=body, headers=headers)
-        response = conn.getresponse()
-        data = response.read(MAX_BODY + 1)
-        if len(data) > MAX_BODY:
-            raise ValueError('response exceeds 16 MiB')
-        return dict(status=response.status, headers=response.getheaders(), body=base64.b64encode(data).decode())
-    finally:
-        conn.close()
 
 
 def send(sock, obj):
@@ -365,14 +238,12 @@ class GatewayHandler(socketserver.BaseRequestHandler):
             msg = receive(self.request)
             if self.server.admin:
                 result = self.server.policy.admin(msg)
-                if msg['op'] == 'allow' and 'host' in msg:
+                if msg['op'] == 'allow':
                     self.server.policy.wait_for_routes()
             elif msg.get('op') == 'watch' and self.server.routing:
                 switched = True
                 self.watch()
                 return
-            elif msg.get('op') == 'fetch':
-                result = fetch(self.server.policy, msg)
             elif msg.get('op') in ('list', 'denied'):
                 result = self.server.policy.inspect(msg['op'])
             elif msg.get('op') == 'endpoints':
@@ -394,7 +265,7 @@ class GatewayHandler(socketserver.BaseRequestHandler):
             else:
                 raise ValueError('unknown request operation')
             send(self.request, dict(ok=True, result=result))
-        except (OSError, ValueError, KeyError, TypeError, EOFError, http.client.HTTPException) as e:
+        except (OSError, ValueError, KeyError, TypeError, EOFError) as e:
             if not switched:
                 try:
                     send(self.request, dict(ok=False, error=str(e)))
@@ -507,18 +378,20 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         try:
             if any(ord(c) <= 32 or ord(c) >= 127 for c in self.path):
                 raise ValueError('invalid proxy URL')
-            requested = urllib.parse.urlsplit(self.path)
-            u = parse_url(urllib.parse.urlunsplit((requested.scheme, requested.netloc, '/', '', '')))
-            if u.scheme != 'http' or requested.fragment:
-                raise ValueError('HTTPS requires CONNECT')
-            u = u._replace(path=requested.path or '/', query=requested.query)
+            u = urllib.parse.urlsplit(self.path)
+            if u.scheme != 'http' or not u.hostname or u.username is not None or u.fragment:
+                raise ValueError('expected HTTP proxy URL without credentials or fragment')
+            host = endpoint_host(u.hostname)
+            port = u.port if u.port is not None else 80
+            if not 1 <= port <= 65535 or '\\' in u.netloc:
+                raise ValueError('invalid proxy destination')
             with unix_connect(self.server.gateway) as upstream:
-                send(upstream, dict(op='tunnel', host=u.hostname, port=origin(u)[2]))
+                send(upstream, dict(op='tunnel', host=host, port=port))
                 response = receive(upstream)
                 if not response.get('ok'):
                     self.send_error(403, 'Host tunnel denied')
                     return
-                target = u.path + ('?' + u.query if u.query else '')
+                target = (u.path or '/') + ('?' + u.query if u.query else '')
                 headers = ''.join(f'{key}: {value}\r\n' for key, value in self.headers.items()
                                   if key.lower() not in ('host', 'connection', 'proxy-connection', 'proxy-authorization'))
                 upstream.sendall((f'{self.command} {target} {self.request_version}\r\n'

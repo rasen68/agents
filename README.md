@@ -24,18 +24,17 @@ The sandbox supplies paths and binaries that are useful to my own development. Y
 
 ## Network isolation
 
-Sandboxes route network connections through a controlled gateway. Agent CLIs can connect to their model providers. Other destinations require temporary approval from the host for a specific host and port. Agents can inspect permissions and blocked attempts; the user grants and revokes access.
+Sandboxes route network connections through a controlled gateway. Agent CLIs can connect to their model providers. Other destinations require approval from the host for a specific host and port. Agents can inspect permissions and blocked attempts; the user grants and revokes access.
 
-Once a destination is approved, agents can run the same scripts and HTTP clients they would use outside the sandbox, without changing their networking code. HTTPS connections keep their normal encryption and certificate checks. Approval covers the whole host and port, including all API paths and methods. Expiry or revocation blocks new connections; existing connections can continue. Custom DNS transports and arbitrary UDP remain blocked.
+Once a destination is approved, agents can run the same scripts and HTTP clients they would use outside the sandbox, without changing their networking code. HTTPS connections keep their normal encryption and certificate checks. Approval covers the whole host and port, including all API paths and methods. Revocation blocks new connections; existing connections can continue. Custom DNS transports and arbitrary UDP remain blocked.
 
-Run approval commands in a host shell. `NAME` is the sandbox name available to the agent as `AGENT_SANDBOX`. Grant a host and port for normal scripts, or an exact URL and method for requests through `sandbox-http`:
+Run approval commands in a host shell. `NAME` is the sandbox name available to the agent as `AGENT_SANDBOX`. Grant a host and port for scripts and HTTP clients:
 
 ```sh
-sandbox-net allow NAME --host api.example.com --port 443 --ttl 10m
-sandbox-net allow NAME --url 'https://api.example.com/data' --method GET --ttl 10m --requests 1
+sandbox-net allow NAME --host api.example.com --port 443
 ```
 
-These grants expire after ten minutes; the URL grant permits one GET request. Each `allow` returns a grant ID you can use to revoke access early:
+Grants last until revoked or the sandbox session ends. Each `allow` returns a grant ID you can use to revoke access:
 
 ```sh
 sandbox-net revoke NAME GRANT_ID

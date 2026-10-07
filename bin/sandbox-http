@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-TOOLING=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
-exec python3 -B "$TOOLING/lib/sandbox_network_cli.py" http "$@"
