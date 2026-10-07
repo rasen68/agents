@@ -403,8 +403,7 @@ case "$agent" in
 s = socket.socket(socket.AF_UNIX)
 s.settimeout(0.2)
 s.connect(sys.argv[1])" "$socket" 2>/dev/null; then
-                    ~/.local/bin/codex --remote "unix://$socket" \
-                        "$@"
+                    ~/.local/bin/codex --remote "unix://$socket" "$@"
                     exit
                 fi
                 sleep 0.1
@@ -429,8 +428,7 @@ sandbox_path+=":$HOME/.local/bin:$TOOLING/bin:$HOME/.cargo/bin"
 sandbox_path+=":$HOME/.cargo/hostbin:$HOME/.pi/agent/bin"
 sandbox_path+=":/usr/local/bin:/usr/bin:/bin"
 
-# Provider tunnels carry TLS unchanged. They are intentionally separate
-# from HTTP grants, which inspect methods and exact URLs at the broker.
+# Provider tunnels carry TLS unchanged and permit their exact hosts on port 443.
 case $agent in
     codex) provider_hosts+=(api.openai.com chatgpt.com auth.openai.com) ;;
     claude) provider_hosts+=(api.anthropic.com platform.claude.com) ;;
