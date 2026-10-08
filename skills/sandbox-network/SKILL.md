@@ -36,6 +36,9 @@ sandbox-net allow NAME --host api.example.com --port 443
 rm -- "$0"
 ```
 
+You should make this script inside the project directory itself (where it is
+most easily accessible by the user).
+
 Wait for the user to grant access before retrying. Proxy-aware clients and
 ordinary TCP clients use the gateway automatically. A host grant permits
 connections to the entire host and port, including all API paths and methods.

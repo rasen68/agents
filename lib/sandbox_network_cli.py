@@ -37,7 +37,16 @@ def user_command(args):
         msg.update(host=args.host, port=args.port, connections=args.connections)
     else:
         msg['id'] = args.id
-    print(json.dumps(exchange(named_socket(args.name, 'admin.sock'), msg), indent=2))
+    try:
+        result = exchange(named_socket(args.name, 'admin.sock'), msg)
+    except ValueError as exc:
+        if args.command == 'allow' and str(exc) == "'ttl'":
+            raise ValueError(
+                f'older network broker requires ttl; restart sandbox {args.name} '
+                'from a host shell, then retry the grant'
+            ) from exc
+        raise
+    print(json.dumps(result, indent=2))
     return 0
 
 
