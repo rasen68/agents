@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 TOOLING=$(dirname "$(readlink -f "$0")")
 if (($#)); then
