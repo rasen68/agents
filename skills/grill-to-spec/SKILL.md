@@ -1,5 +1,5 @@
 ---
-name: grill-to-spec
+name: interview-to-spec
 description: >-
   Interview the user to resolve a plan or design, then write the agreed spec
   to the project overlay. Use for brainstorming or stress-testing work that

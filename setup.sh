@@ -18,10 +18,6 @@ link_file() {
 
 link_home() {
     local home=$1 tooling=$2 skill command agents_md
-    local shortcut=$home/.local/bin/sandbox-http
-    if [[ -L $shortcut && $(readlink "$shortcut") == "$tooling/bin/sandbox-http" ]]; then
-        rm -- "$shortcut"
-    fi
     local dests=(
         .agents/AGENTS.md .cursor/AGENTS.md .cursor/rules/AGENTS.mdc
         .claude/CLAUDE.md .codex/AGENTS.md .pi/agent/AGENTS.md
