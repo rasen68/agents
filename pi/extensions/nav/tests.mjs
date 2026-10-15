@@ -11,9 +11,39 @@ const install = process.env.PI_TEST_INSTALL ?? join(managedRoot, "releases", rea
 const require = createRequire(`${install}/jiti/package.json`);
 const { createJiti } = require("jiti");
 const jiti = createJiti(import.meta.url, {
-  alias: { "@earendil-works/pi-coding-agent": `${install}/@earendil-works/pi-coding-agent/dist/index.js` },
+  alias: Object.fromEntries(["pi-coding-agent", "pi-ai", "pi-tui"].map((name) => [
+    `@earendil-works/${name}`, `${install}/@earendil-works/${name}/dist/index.js`,
+  ])),
 });
-const cd = await jiti.import("./index.ts");
+const cd = await jiti.import("./cd.ts");
+const nav = await jiti.import("./index.ts");
+const { TuiMainScreen, TuiAltScreen } = await import(`${install}/@earendil-works/pi-tui/dist/index.js`);
+
+test("one extension registers cd, reasoning shortcuts and reversible picker hooks", () => {
+  const commands = [];
+  const shortcuts = [];
+  const shutdown = [];
+  const mainInput = TuiMainScreen.prototype.handleTerminalInput;
+  const altInput = TuiAltScreen.prototype.handleTerminalInput;
+  nav.default({
+    registerCommand: (name) => commands.push(name),
+    registerShortcut: (name) => shortcuts.push(name),
+    on: (event, handler) => {
+      assert.equal(event, "session_shutdown");
+      shutdown.push(handler);
+    },
+  });
+  try {
+    assert.deepEqual(commands, ["cd"]);
+    assert.deepEqual(shortcuts, ["alt+j", "alt+k"]);
+    assert.notEqual(TuiMainScreen.prototype.handleTerminalInput, mainInput);
+    assert.notEqual(TuiAltScreen.prototype.handleTerminalInput, altInput);
+  } finally {
+    for (const handler of shutdown) handler();
+  }
+  assert.equal(TuiMainScreen.prototype.handleTerminalInput, mainInput);
+  assert.equal(TuiAltScreen.prototype.handleTerminalInput, altInput);
+});
 const { SessionManager, createAgentSessionServices, createAgentSessionFromServices, createAgentSessionRuntime } = await import(`${install}/@earendil-works/pi-coding-agent/dist/index.js`);
 const root = mkdtempSync(join(tmpdir(), "pi-cd-test-"));
 const previousAgentDir = process.env.PI_CODING_AGENT_DIR;

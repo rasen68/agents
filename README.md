@@ -8,8 +8,7 @@ Install agent CLIs with `install-clis.sh`, then run `setup.sh` to link instructi
 
 Setup preserves existing real files and directories at its destinations. It replaces symlinks.
 
-Pi's portable settings, extensions, and local package sources live in [`pi/`](pi/README.md).
-Credentials, sessions, and installed runtimes aren't stored here.
+Pi's portable settings, extensions, and local package sources live in [`pi/`](pi/README.md).  Credentials, sessions, and installed runtimes aren't stored here.
 
 ## Skills and workflows
 

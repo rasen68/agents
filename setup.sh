@@ -48,7 +48,13 @@ for config in settings.json keybindings.json; do
     fi
 done
 
-link_file "$TOOLING/pi/picker-navigation" "$HOME/.pi/agent/picker-navigation"
+# Remove only links created by earlier versions of setup.
+for legacy in extensions/cd extensions/reasoning-shortcuts.ts extensions/picker-navigation.ts picker-navigation; do
+    target="$HOME/.pi/agent/$legacy"
+    if [[ -L $target && $(readlink "$target") == "$TOOLING/pi/$legacy" ]]; then
+        rm -- "$target" || exit "$?"
+    fi
+done
 
 for package in "$TOOLING"/pi/local-packages/pi-*; do
     [[ -d $package ]] || continue

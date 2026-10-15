@@ -1,7 +1,30 @@
-# /cd
+# Nav
 
-Personal Pi extension, loaded automatically from `~/.pi/agent/extensions/cd/index.ts`.
+One personal Pi extension for directory changes, reasoning shortcuts, and picker
+navigation. Loaded automatically from `~/.pi/agent/extensions/nav/index.ts`.
 Run `/reload` in an existing Pi session to load it.
+
+- `/cd` changes directory while keeping the conversation.
+- `Alt+j` decreases the reasoning level and `Alt+k` increases it, within the
+  active model's supported levels. Neither wraps at the ends.
+- `j` moves down and `k` moves up in recognized pickers when their search is
+  exactly empty. With search text present, both keys remain text. Main prompts,
+  input dialogs, session renaming, and tree label editing are unchanged. Paste
+  a query to search for a leading j/k in an empty picker.
+
+Picker navigation intercepts both main-screen and fullscreen terminal input.
+It recognizes Pi and pi-parallel-sessions picker shapes, leaving unknown custom
+screens alone. This uses an internal method because conditional picker bindings
+aren't available through keybindings.json. Recheck compatibility after Pi upgrades.
+Hooks are shared across parallel runtimes and removed on session shutdown.
+
+`setup.sh` links this directory and removes obsolete repository-generated links
+for the former `cd`, `reasoning-shortcuts`, and `picker-navigation` extensions.
+It preserves real copies. Before adopting `nav` over real copies, move those old
+extensions and `~/.pi/agent/picker-navigation` to a backup outside Pi's discovery
+paths, then rerun setup. Don't load the old extensions alongside `nav`.
+
+## /cd
 
 ```text
 /cd /absolute/path
@@ -43,13 +66,14 @@ may not survive. The shell that launched Pi is not changed.
 ## Verification
 
 ```bash
-node --test pi/extensions/cd/tests.mjs
+node --test pi/extensions/nav/tests.mjs
 ```
 
 The test runner discovers the current managed Pi install. For another installation,
 set `PI_TEST_INSTALL` to its `node_modules` directory.
 
-Verified against Pi 1.2.0 with Node 24.19.0: all 7 tests pass. Tests cover path
+Tests use the managed Pi installation and cover combined registration and
+reversible picker hooks as well as path
 validation, unsaved sessions, source preservation, active branches, cancellation,
 and fresh-context use. The integration test loads the actual extension through
 Pi's resource loader, invokes `/cd` through `session.prompt()`, and checks the
