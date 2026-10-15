@@ -38,14 +38,8 @@ packages=(
 	pi-btw
 	pi-claude-bridge
 	pi-cursor-provider
-	@juicesharp/rpiv-todo
-	@juicesharp/rpiv-ask-user-question
 )
 
 for package in ${packages[@]}; do
     pi install "npm:$package" || exit "$?"
 done
-
-# rpiv manifests must use Pi's host modules rather than runtime dependencies.
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit "$?"
-python3 "$script_dir/lib/normalize-rpiv-peers.py"

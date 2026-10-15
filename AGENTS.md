@@ -9,7 +9,7 @@ Shared defaults for Cursor, Claude Code, Codex, and Pi. Project overlays under `
 
 ## Shared tooling and local overlays
 
-Most projects have overlays at `~/.agent-overlays`. Discover overlays by running `agent-overlay resolve <absolute/project/root/path>`. If none exists, do not create one unless asked.
+Most projects have overlays at `~/.agent-overlays`. Discover overlays by running `agent-overlay resolve <absolute/project/root/path>`. Do not do this if you are in $HOME, treat that as a place for general projects. If none exists, do not create one unless asked.
 
 ## Persistent project memory
 
