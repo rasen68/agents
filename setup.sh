@@ -48,4 +48,9 @@ for config in settings.json keybindings.json; do
     fi
 done
 
-echo 'Shared instructions and skills configured.'
+for extension in "$TOOLING"/pi/extensions/*; do
+    [[ -e $extension ]] || continue
+    link_file "$extension" "$HOME/.pi/agent/extensions/${extension##*/}"
+done
+
+echo 'Shared instructions, skills, and Pi configuration configured.'
