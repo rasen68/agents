@@ -48,6 +48,8 @@ for config in settings.json keybindings.json; do
     fi
 done
 
+link_file "$TOOLING/pi/picker-navigation" "$HOME/.pi/agent/picker-navigation"
+
 for extension in "$TOOLING"/pi/extensions/*; do
     [[ -e $extension ]] || continue
     link_file "$extension" "$HOME/.pi/agent/extensions/${extension##*/}"
