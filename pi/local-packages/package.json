@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node check-host.mjs && node check-lazy.mjs && node check.mjs"
+    "test": "node check-host.mjs && node check-lazy.mjs && node check.mjs && node --test pi-parallel-sessions/tests/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

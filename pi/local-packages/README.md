@@ -15,6 +15,14 @@ The pinned upstream npm registration has `extensions: []`. It installs runtime
 dependencies without also loading the upstream factory. Don't remove that
 registration without supplying independent dependencies for the fork.
 
+## Parallel sessions
+
+Based on `pi-parallel-sessions` 0.2.8. The fork retains the local session
+lifecycle, naming, saved-session picker, and live-session exclusion changes.
+Its TypeScript entry point loads directly through Pi. The pinned upstream
+registration is retained with extensions disabled. Existing regression tests
+are included under `pi-parallel-sessions/tests/`.
+
 ## Build and verify
 
 Use the managed Pi installation with Node >=22.19. Run from the repository:
