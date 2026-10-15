@@ -50,6 +50,11 @@ done
 
 link_file "$TOOLING/pi/picker-navigation" "$HOME/.pi/agent/picker-navigation"
 
+for package in "$TOOLING"/pi/local-packages/pi-*; do
+    [[ -d $package ]] || continue
+    link_file "$package" "$HOME/.pi/agent/local-packages/${package##*/}"
+done
+
 for extension in "$TOOLING"/pi/extensions/*; do
     [[ -e $extension ]] || continue
     link_file "$extension" "$HOME/.pi/agent/extensions/${extension##*/}"

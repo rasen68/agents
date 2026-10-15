@@ -4,7 +4,9 @@
   "packages": [
     "npm:pi-web-access",
     { "source": "npm:pi-btw", "skills": [] },
-    "npm:pi-cursor-provider"
+    "npm:pi-cursor-provider",
+    { "source": "npm:pi-claude-bridge@0.9.1", "extensions": [] },
+    "./local-packages/pi-claude-bridge"
   ],
   "hideThinkingBlock": true,
   "enabledModels": [

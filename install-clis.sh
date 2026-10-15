@@ -31,15 +31,10 @@ else
     echo 'Pi already installed!'
 fi
 
-packages=(
-	pi-web-access
-	pi-subagents
-	pi-undo-redo
-	pi-btw
-	pi-claude-bridge
-	pi-cursor-provider
-)
-
-for package in ${packages[@]}; do
-    pi install "npm:$package" || exit "$?"
-done
+# The managed Pi installer may provide Node without adding it to the shell PATH.
+node_bin="${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin"
+if [[ -x $node_bin/node ]]; then
+    export PATH="$node_bin:$PATH"
+fi
+TOOLING=$(dirname "$(readlink -f "$0")")
+node "$TOOLING/pi/install.mjs" || exit "$?"
