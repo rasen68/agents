@@ -8,6 +8,9 @@ Install agent CLIs with `install-clis.sh`, then run `setup.sh` to link instructi
 
 Setup preserves existing real files and directories at its destinations. It replaces symlinks.
 
+Pi's portable settings, extensions, and local package sources live in [`pi/`](pi/README.md).
+Credentials, sessions, and installed runtimes aren't stored here.
+
 ## Skills and workflows
 
 A global `AGENTS.md` supplies my preferences wherever Claude, Cursor, Codex, and Pi look for instructions. Shared skills define a workflow of `/init` to establish context, `/interview-to-spec` to resolve design decisions and write a spec, `/handoff` to create handoff documents, and `/spec-review` to review implemented code.

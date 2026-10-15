@@ -38,4 +38,14 @@ link_home() {
 }
 
 link_home "$HOME" "$TOOLING"
+
+# Pi writes these files itself. Seed defaults without making the checkout mutable.
+for config in settings.json keybindings.json; do
+    target="$HOME/.pi/agent/$config"
+    if [[ ! -e $target && ! -L $target ]]; then
+        mkdir -p "$(dirname "$target")"
+        cp -- "$TOOLING/pi/$config" "$target" || exit "$?"
+    fi
+done
+
 echo 'Shared instructions and skills configured.'

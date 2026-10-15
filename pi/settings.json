@@ -1,0 +1,16 @@
+{
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-6.1-sol",
+  "packages": [
+    "npm:pi-web-access",
+    { "source": "npm:pi-btw", "skills": [] },
+    "npm:pi-cursor-provider"
+  ],
+  "hideThinkingBlock": true,
+  "enabledModels": [
+    "openai/gpt-6-astra",
+    "openai/gpt-6-luna",
+    "openai/gpt-6.1-sol",
+    "cursor/default"
+  ]
+}
