@@ -155,4 +155,8 @@ for (const name of packages) {
   link(dir, join(root, 'node_modules', name));
   console.log(`Built ${name}: ${entries.length} modules`);
 }
+// Goal sources load through Pi, but their standalone tests also need host imports.
+if (existsSync(join(root, 'pi-goal-x'))) {
+  link(join(root, 'node_modules'), join(root, 'pi-goal-x/node_modules'));
+}
 console.log(`Host module links target Pi ${version}`);

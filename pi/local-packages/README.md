@@ -23,6 +23,15 @@ Its TypeScript entry point loads directly through Pi. The pinned upstream
 registration is retained with extensions disabled. Existing regression tests
 are included under `pi-parallel-sessions/tests/`.
 
+## Goals and compaction
+
+The `pi-goal-x` 0.32.3 local fork supplies the unified Alt+G goals screen and
+`/goals` command. Goal creation is user-owned; the model's `create_goal` tool
+isn't registered. Sources, design notes, recovery script, and existing tests
+are retained. See `pi-goal-x/docs/local-fork.md` for the fork's decisions.
+The upstream npm registration installs dependencies with its extensions disabled.
+`pi-codex-compaction` remains an upstream npm package, as in the live setup.
+
 ## Build and verify
 
 Use the managed Pi installation with Node >=22.19. Run from the repository:
@@ -52,7 +61,8 @@ by Git. The host facade follows `install/current-version` at load time, includin
 after an old release is deleted. It uses internal Pi module paths, so rebuild and
 test after upgrading Pi, then restart existing sessions.
 
-Verified with Pi 1.2.0 and Node 24.19.0. Checks compare upstream and compiled
+The bridge checks passed during import with Pi 1.2.0 and Node 24.19.0.
+The imported goal suite wasn't run during this migration. Checks compare upstream and compiled
 registrations, exercise teardown/reload, verify deferred SDK/MCP loading, and
 execute an MCP tool through an in-memory transport. They don't send model
 requests. Live Claude responses and interactive terminal behavior aren't covered.

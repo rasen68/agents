@@ -8,7 +8,10 @@
     { "source": "npm:pi-claude-bridge@0.9.1", "extensions": [] },
     "./local-packages/pi-claude-bridge",
     { "source": "npm:pi-parallel-sessions@0.2.8", "extensions": [] },
-    "./local-packages/pi-parallel-sessions"
+    "./local-packages/pi-parallel-sessions",
+    "npm:pi-codex-compaction",
+    { "source": "npm:pi-goal-x", "extensions": [] },
+    "./local-packages/pi-goal-x"
   ],
   "hideThinkingBlock": true,
   "enabledModels": [
