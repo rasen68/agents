@@ -12,8 +12,10 @@ version over an existing local copy, move the local copy to a backup outside
 Pi's discovery paths, then rerun setup. Don't leave extension backups under
 `extensions/`, where Pi would load them too.
 
-Checks that don't make model requests:
+`../install-clis.sh` installs the npm packages in `settings.json` and registers
+the local forks from this checkout. To update just those package declarations,
+run `node pi/install.mjs` with Pi and Node on PATH. See
+[`local-packages/README.md`](local-packages/README.md) for the retained forks.
 
-```sh
-python3 -B -m unittest discover -s tests -p 'test_pi*.py' -v
-```
+The Claude bridge isn't configured. Credentials, device IDs, runtime binaries,
+and generated dependency directories remain outside Git.

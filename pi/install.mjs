@@ -19,7 +19,8 @@ export function mergePackages(current, desired, packageRoot = root) {
     return source.includes('local-packages/') ? source.split('/').at(-1) : source;
   };
   const managed = new Set(portable.map(identity));
-  return [...current.filter(entry => !managed.has(identity(entry))), ...portable];
+  const removed = new Set(['npm:pi-claude-bridge', 'pi-claude-bridge']);
+  return [...current.filter(entry => !managed.has(identity(entry)) && !removed.has(identity(entry))), ...portable];
 }
 
 function run(command, args) {
@@ -35,8 +36,6 @@ export function install() {
     const source = typeof entry === 'string' ? entry : entry.source;
     if (source.startsWith('npm:')) run('pi', ['install', source]);
   }
-  run('npm', ['--prefix', join(root, 'local-packages'), 'ci', '--ignore-scripts']);
-  run('npm', ['--prefix', join(root, 'local-packages'), 'run', 'build']);
   mkdirSync(agent, { recursive: true });
   const path = join(agent, 'settings.json');
   let current;
@@ -46,6 +45,7 @@ export function install() {
     if (error.code !== 'ENOENT') throw error;
     current = { ...defaults };
   }
+  current = { ...defaults, ...current };
   current.packages = mergePackages(current.packages ?? [], defaults.packages);
   const temporary = `${path}.${process.pid}.tmp`;
   try {
