@@ -24,17 +24,18 @@ else
 	echo "Cursor agent already installed!"
 fi
 
-if ! command -v pi >/dev/null 2>&1; then
+# Install pi
+if [[ -z $( command -v pi ) ]]; then
     echo 'Installing Pi...'
     curl -fsSL https://pi.dev/install.sh | sh
+
+	# The managed Pi installer may provide Node without adding it to the shell PATH.
+	node_bin="${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin"
+	if [[ -x $node_bin/node ]]; then
+		export PATH="$node_bin:$PATH"
+	fi
+	TOOLING=$(dirname "$(readlink -f "$0")")
+	node "$TOOLING/pi/install.mjs" || exit "$?"
 else
     echo 'Pi already installed!'
 fi
-
-# The managed Pi installer may provide Node without adding it to the shell PATH.
-node_bin="${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin"
-if [[ -x $node_bin/node ]]; then
-    export PATH="$node_bin:$PATH"
-fi
-TOOLING=$(dirname "$(readlink -f "$0")")
-node "$TOOLING/pi/install.mjs" || exit "$?"
