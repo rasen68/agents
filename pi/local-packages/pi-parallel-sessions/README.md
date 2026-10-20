@@ -87,22 +87,28 @@ The personal overlay has a real-Pi PTY regression runner for terminal handoff,
 quit, history preservation/resume, fullscreen, replacement/reload, and signals.
 Provider-backed generation still needs a manual check.
 
-## Automatic titles (local fork)
+## Automatic topics and titles (local fork)
 
-After the first successful agent run with a completed text answer in an unnamed
-session, this fork requests a 3–6-word title from `openai/gpt-6-luna`. It supplies
-the first user message (at most 4,000 characters), the completed assistant answer
-(at most 6,000 characters), and an instruction identifying Pi as a configurable
-coding-agent harness. Tool output and reasoning are excluded. Aborted, failed,
-truncated, and tool-call responses do not trigger naming; a later successful
-answer can still supply the first eligible completion.
-The request runs in the background, has a 15-second deadline and a 128-token
-output cap, and uses Pi's existing model registry and credentials. It does not
-change the main agent's model. Titles are saved as native session names and
-shown in the picker and widget. Existing/manual names are preserved, including
-names set while the request is pending. Missing models and failed requests leave
-the session unnamed and do not interrupt the agent. No automatic retry is made
-for the same session manager.
+After each successful completed text answer, this fork asks `openai/gpt-6-luna`
+to keep the current topic or supply a new 3–6-word label when the subject changes.
+It supplies the latest user message, capped at 4,000 characters, and the answer,
+capped at 6,000 characters. Tool output and reasoning are excluded. Aborted,
+failed, truncated, and intermediate tool-call responses do not trigger naming.
+
+Requests run in the background, serialized per session, with a 15-second deadline
+and a 128-token output cap. They use Pi's model registry and credentials without
+changing the main agent's model. Missing models, invalid output, and provider
+failures do not interrupt the agent. Usage is recorded in the session.
+
+Topic changes and completion checkpoints are stored as `pi.transcript-topic`
+custom entries outside model context, anchored to user/answer entry IDs. They
+survive reloads and are searchable through the transcript-memory extension.
+There is no archive-wide topic backfill.
+
+Automatically managed display titles follow topic changes in the picker and
+widget. Manual titles are never overwritten, including renames made during a
+pending request. Existing titles without recorded automatic provenance are
+preserved as manual. Topic tracking continues independently of manual titles.
 
 This is a local fork of npm `pi-parallel-sessions@0.2.8`. Pi settings disable
 that upstream extension and load this directory instead. No build is needed.

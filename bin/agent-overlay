@@ -23,11 +23,6 @@ digest=$(printf '%s' "$root" | sha256sum)
 overlay=$store/$base-${digest:0:12}
 if [[ $1 == init ]]; then
     mkdir -p "$overlay/plans"
-    if [[ ! -e $overlay/plans/README.md ]]; then
-        printf '%s\n' \
-            'Personal specs, plans, handoffs, and research for this project.' \
-            > "$overlay/plans/README.md"
-    fi
 elif [[ ! -d $overlay ]]; then
     echo "agent-overlay: no overlay for $root; run agent-overlay init" >&2
     exit 1

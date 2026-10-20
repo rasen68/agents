@@ -13,7 +13,8 @@ is, and do it. If you can't figure it out, ask.
 ## Process
 
 Resolve the overlay with `agent-overlay resolve <root>` and read its `AGENTS.md`
-and `CONTEXT.md` if present. If nothing is there, it's the wrong place for this skill.
+if present. Consult relevant specs and handoffs, and use transcript search for
+prior intent when available. Treat legacy context as historical, not current state.
 There will likely be a `plans/` folder with `.md` files containing specs and research
 notes. Based on that, determine what the user's goal is, if possible. Likely, it
 will be clearly written in a spec. Attempt to determine the next logical step that
@@ -28,4 +29,4 @@ the spec/plans, state clearly what you know and ask.
 
 ## When done
 
-Create a report about what you finished for the user, using the `/unslop` skill. Don't load it until you're done. Update the overlay with what you complete, including `CONTEXT.md`, the relevant plans, etc.
+Report what you finished to the user, using the `/unslop` skill. No routine overlay update is required. Write a short handoff only if unfinished work needs one.

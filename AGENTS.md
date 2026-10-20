@@ -9,18 +9,11 @@ Shared defaults for Cursor, Claude Code, Codex, and Pi. Project overlays under `
 
 ## Shared tooling and local overlays
 
-Most projects have overlays at `~/.agent-overlays`. Discover overlays by running `agent-overlay resolve <absolute/project/root/path>`. Do not do this if you are in $HOME, treat that as a place for general projects. If none exists, do not create one unless asked.
+Most projects have overlays at `~/.agent-overlays`. Discover overlays by running `agent-overlay resolve <absolute/project/root/path>`. Do not do this if you are in $HOME, treat that as a place for general projects. If none exists, do not create one unless asked. Overlays hold durable instructions such as `AGENTS.md` and certain artifacts.
 
-## Persistent project memory
-
-The overlay should let a fresh agent understand the current project, explain consequential decisions, and reuse helpful tools without reading old transcripts. Maintain it throughout work, including before completing a task or handing it off.
-
-- At startup, read the overlay's `AGENTS.md`, `CONTEXT.md`, `rules/`, and `plans/README.md` if present, and inspect changes since the last recorded state. Reconcile material differences with current facts, and record unexplained changes as just observations.
-- Keep `AGENTS.md` and `CONTEXT.md` current. Preserve historical changes in `CHANGES.md`, and decisions with their reasons, evidence, and considered alternatives in `plans/decisions.md`. Mark corrected or superseded decisions.
-- Keep `plans/README.md` as a short index of decisions, active work, experiments, and reusable artifacts. Write explicit specs and plans to `plans/`.
-- When doing research, handing off conversations, or gleaning information about the user's intent that's meaningful but not enough to write a full spec, write it to `notes/`. If you see information that's in `plans/` or `CONTEXT.md` that should be in `notes/` instead, move it.
-- Save useful scripts, checks, and required supporting files in the overlay, with enough instructions to run them again. Do not leave their only copy in temporary storage. Scripts specifically go in `scripts/`.
-- Record meaningful decisions and findings when they occur. Include verification commands, results, and what remains unverified. Cite primary sources in substantial research notes. Skip routine activity that will not help future work.
+- At startup, read the overlay's `AGENTS.md` and relevant `rules/` if present. Read specs, handoffs, or legacy context only when relevant to the task.
+- Write to the overlays for durable information and instructions that would be helpful to future agents, and that isn't readily discoverable from the repository.  Also write explicitly requested specs or documentation, durable non-obvious instructions, or short handoffs for unfinished work.
+- Save reusable scripts and required supporting files in the overlay, with necessary usage instructions. Scripts go in `scripts/`. Do not leave their only copy in temporary storage. Consider writing scripts for reusable workflows--think calculation or evaluation, but not installation or migration.
 - Use subagents to parallelize independent inspection and substantial drafting when useful, use appropriate reasoning levels. Assign one writer per shared file; the primary agent reconciles findings and checks claims.
 
 ## Autonomy
@@ -50,7 +43,7 @@ The overlay should let a fresh agent understand the current project, explain con
 ## Communication
 
 - Concise; no filler.
-- Resarch results: always summarize in chat, in addition to writing to the overlay.
+- Research results: summarize in chat. Write a separate document only when requested or needed as a durable artifact.
 - When recommending a library, data structure, or framework that is not the only/obvious choice: give alternatives and why you prefer one.
 - When the user asked for prose (e.g. answering a question, writing a spec) or when delivering a nontrivial report (e.g. explaining a large implementation), use `/unslop` for better writing. Do not mention that you are using it, just do it.
 - When verifying, claim that relevant project-scoped tests pass, but if you run lints or checks such as `git diff --check`, do not tell the user this. Keep responses to project-scoped details the user cares about.

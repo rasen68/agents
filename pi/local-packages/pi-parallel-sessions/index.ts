@@ -1072,14 +1072,7 @@ export default function (pi: ExtensionAPI) {
 		if (record) host.updateActivity(ctx, "idle");
 		if (!event.messages?.length) return;
 		const manager = ctx.sessionManager;
-		const firstUser = manager.getBranch().find(
-			(entry: any) => entry.type === "message" && entry.message?.role === "user",
-		)?.message;
-		const prompt = typeof firstUser?.content === "string"
-			? firstUser.content
-			: firstUser?.content?.filter((part: any) => part.type === "text")
-				.map((part: any) => part.text).join(" ");
-		void nameSession(ctx, prompt, event.messages).then((title: string | undefined) => {
+		void nameSession(ctx, undefined, event.messages).then((title: string | undefined) => {
 			if (title && record && host.get(record.id) === record && record.sessionManager === manager) {
 				record.transcript = manager.getSessionName();
 				host.notify();

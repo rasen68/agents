@@ -21,10 +21,13 @@ code edits. Do not create project instruction files unless asked.
 2. Read existing overlay files and explore the project read-only: README,
    manifests, layout, build/test commands, domain terms, and testing seams.
    Prefer discovery over questions; ask only for material missing facts.
-3. Follow [guidelines.md](guidelines.md) to write or refresh `AGENTS.md`,
-   `CONTEXT.md`, optional `rules/`, and a short `plans/README.md`. Preserve
-   user content. Legacy `workspace.json` files are inert. Match shared
-   preferences from `~/.agents/AGENTS.md` without duplicating them.
+3. Follow [guidelines.md](guidelines.md) to write or refresh a short `AGENTS.md`
+   with durable instructions not readily discoverable in the repository.
+   Add `rules/` only for non-obvious project constraints. Do not generate
+   routine context, changelog, decision-log, or index files. Preserve user
+   content and leave legacy memory files alone unless cleanup was requested.
+   Legacy `workspace.json` files are inert. Follow shared preferences from
+   `~/.agents/AGENTS.md` without duplicating them.
 4. Report the overlay path and what changed. Do not make a commit or add
    symlinks to retired overlay locations. Overlays have no Git lifecycle.
 

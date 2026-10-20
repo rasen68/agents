@@ -15,8 +15,10 @@ into a spec in the project's overlay. Do not write production code.
 ## Interview
 
 Resolve the overlay with `agent-overlay resolve <root>` and read its
-`CONTEXT.md` if present. Explore the codebase and documentation to establish
-facts before asking about them. Use a subagent only for broad searches.
+`AGENTS.md` if present. Consult relevant specs or handoffs and search transcripts
+for prior intent when useful. Check legacy context against the repository.
+Explore the codebase and documentation to establish facts before asking about
+them. Use a subagent only for broad searches.
 
 Map the decisions as a tree. Ask questions in rounds, covering every decision
 whose prerequisites are settled. Number each question and include a recommended
