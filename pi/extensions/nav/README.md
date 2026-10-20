@@ -1,10 +1,13 @@
 # Nav
 
-One personal Pi extension for directory changes, reasoning shortcuts, and picker
-navigation. Loaded automatically from `~/.pi/agent/extensions/nav/index.ts`.
+One personal Pi extension for directory changes, reasoning shortcuts, picker
+navigation, and transcript navigation. Loaded automatically from `~/.pi/agent/extensions/nav/index.ts`.
 Run `/reload` in an existing Pi session to load it.
 
 - `/cd` changes directory while keeping the conversation.
+- `Alt+n` toggles [transcript navigation](transcript.md), using Pi's native
+  message rendering. Counted j/k or Up/Down scroll; h/l or Left/Right jump
+  between assistant replies. Every open starts at the bottom.
 - `Alt+j` decreases the reasoning level and `Alt+k` increases it, within the
   active model's supported levels. Neither wraps at the ends.
 - `j` moves down and `k` moves up in recognized pickers when their search is

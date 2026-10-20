@@ -7,8 +7,11 @@ stay local. Model names are personal defaults and require a provider that offers
 them. Choose another model in `/model` if necessary.
 
 The [`nav` extension](extensions/nav/README.md) combines `/cd`, reasoning-level
-shortcuts, and empty-search picker navigation. Setup removes obsolete links
-for the three former extensions only when they point into this checkout.
+shortcuts, empty-search picker navigation, and an Alt+N transcript viewer.
+Use counted j/k or Up/Down to scroll, and h/l or Left/Right to jump between
+assistant replies. Alt+N returns to the prompt; every open starts at the bottom.
+Setup removes obsolete links for the three former extensions only when they
+point into this checkout.
 
 The [`pi-code-blocks` extension](extensions/pi-code-blocks/README.md) renders
 assistant code fences with `batcat` or `bat` syntax colors, line numbers, and
