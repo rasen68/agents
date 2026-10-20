@@ -10,6 +10,12 @@ The [`nav` extension](extensions/nav/README.md) combines `/cd`, reasoning-level
 shortcuts, and empty-search picker navigation. Setup removes obsolete links
 for the three former extensions only when they point into this checkout.
 
+The [`pi-code-blocks` extension](extensions/pi-code-blocks/README.md) renders
+assistant code fences with `batcat` or `bat` syntax colors, line numbers, and
+borders. It also hides `.md` edit previews and diffs, leaving only the edit
+label and path. Errors remain visible; other file types are unchanged.
+Requires Pi 1.3.0 or later.
+
 Extensions and supporting directories are linked by setup. Existing real files
 and directories are preserved, as with the rest of setup. To adopt a repository
 version over an existing local copy, move the local copy to a backup outside

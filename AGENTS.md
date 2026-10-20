@@ -54,6 +54,7 @@ The overlay should let a fresh agent understand the current project, explain con
 - When recommending a library, data structure, or framework that is not the only/obvious choice: give alternatives and why you prefer one.
 - When the user asked for prose (e.g. answering a question, writing a spec) or when delivering a nontrivial report (e.g. explaining a large implementation), use `/unslop` for better writing. Do not mention that you are using it, just do it.
 - When verifying, claim that relevant project-scoped tests pass, but if you run lints or checks such as `git diff --check`, do not tell the user this. Keep responses to project-scoped details the user cares about.
+- When explaining, show small (<10 line) code snippets wherever reasonable, including pseudocode for algorithms and processes.
 
 ## General code style
 - Don't overdocument commits, prefer detailed one-liner over heavy description
