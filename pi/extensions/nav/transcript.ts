@@ -14,7 +14,8 @@ function transcriptComponents(tui: TUI): Component[] {
     || !document.children.every(child => child instanceof Container)) {
     throw new Error('Transcript navigation: unsupported Pi transcript layout.');
   }
-  return (document.children[2] as Container).children.slice();
+  return [document.children[0], document.children[1],
+    ...(document.children[2] as Container).children];
 }
 
 function isReply(component: Component): boolean {
@@ -36,7 +37,13 @@ class TranscriptViewer implements Component {
     private readonly tui: TUI,
     private readonly theme: Theme,
     private readonly done: () => void,
-  ) {}
+  ) {
+    const viewportTop = (tui as TUI & { viewportTop?: number }).viewportTop;
+    // Regular mode renders the document and prompt as one terminal-owned stream.
+    this.offset = viewportTop ?? Math.max(0,
+      tui.children.reduce((height, child) => height + child.render(tui.terminal.columns).length, 0)
+      - tui.terminal.rows);
+  }
 
   invalidate() {
     this.layout = undefined;
@@ -88,8 +95,8 @@ class TranscriptViewer implements Component {
     const height = Math.max(1, this.tui.terminal.rows);
     const layout = this.getLayout(width);
     const pageSize = Math.max(0, height - 1);
-    // A new viewer starts at the bottom; reply jumps can place any reply at the top.
-    this.offset ??= Math.max(0, layout.lines.length - pageSize);
+    // Preserve the live viewport on entry, including the space below the transcript.
+    this.offset ??= 0;
     this.offset = Math.max(0, Math.min(layout.lines.length - 1, this.offset));
     const fill = (text: string) => {
       const clipped = truncateToWidth(text, width);

@@ -1,8 +1,12 @@
 # Transcript navigation
 
 Press **Alt+N** to navigate the transcript using the same message components
-that Pi displays when you scroll up. Every open starts at the bottom. Press
+that Pi displays when you scroll up. It opens at the current viewport, keeping
+text on the same terminal rows rather than moving it into the prompt area. Press
 **Alt+N** again, or Escape, to return to the prompt without changing your draft.
+
+Fullscreen mode uses Pi's current scroll position. Regular mode preserves the
+live prompt layout, but can't read terminal-owned scrollback positions.
 
 | Key | Action |
 | --- | --- |
