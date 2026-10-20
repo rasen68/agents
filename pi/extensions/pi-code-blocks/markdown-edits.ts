@@ -8,20 +8,23 @@ function isMarkdown(args: { path?: unknown }) {
 export default function registerMarkdownEdits(pi: ExtensionAPI) {
   pi.registerToolRenderer((toolName, next) => {
     const original = next();
-    if (toolName !== 'edit' || !original) return original;
+    if ((toolName !== 'edit' && toolName !== 'write') || !original) return original;
 
     return {
       ...original,
       renderCall(args, theme, context) {
         if (!isMarkdown(args)) return original.renderCall!(args, theme, context);
 
+        const header = new Text(
+          `${theme.fg('toolTitle', theme.bold(toolName))} ${theme.fg('accent', args.path)}`,
+          0, 0,
+        );
+        if (original.renderShell !== 'self') return header;
+
         const background = context.isError ? 'toolErrorBg'
           : context.isPartial ? 'toolPendingBg' : 'toolSuccessBg';
         const block = new Box(context.outputPad, 1, text => theme.bg(background, text));
-        block.addChild(new Text(
-          `${theme.fg('toolTitle', theme.bold('edit'))} ${theme.fg('accent', args.path)}`,
-          0, 0,
-        ));
+        block.addChild(header);
         return block;
       },
       renderResult(result, options, theme, context) {

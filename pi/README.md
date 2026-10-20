@@ -12,8 +12,8 @@ for the three former extensions only when they point into this checkout.
 
 The [`pi-code-blocks` extension](extensions/pi-code-blocks/README.md) renders
 assistant code fences with `batcat` or `bat` syntax colors, line numbers, and
-borders. It also hides `.md` edit previews and diffs, leaving only the edit
-label and path. Errors remain visible; other file types are unchanged.
+borders. It also hides `.md` edit previews, diffs, and write contents, leaving
+only the tool label and path. Errors remain visible; other file types are unchanged.
 Requires Pi 1.3.0 or later.
 
 Extensions and supporting directories are linked by setup. Existing real files

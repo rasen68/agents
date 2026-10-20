@@ -33,10 +33,6 @@ preferences, and device identity. Local package declarations become absolute
 checkout paths. It doesn't delete existing host copies. The upstream npm
 registrations have extensions disabled so Pi doesn't load both implementations.
 
-The Claude bridge is excluded from both the source tree and package declarations.
-The installer removes old bridge registrations as well. The removed todo and
-questionnaire packages aren't included.
-
 Existing fork tests are retained for later use. Standalone tests need Pi's host
 peer packages available through `node_modules`; normal extension loading uses
 Pi's host-module mapping. Dependency directories aren't stored in Git. The
