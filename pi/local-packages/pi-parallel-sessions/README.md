@@ -102,7 +102,7 @@ failures do not interrupt the agent. Usage is recorded in the session.
 
 Topic changes and completion checkpoints are stored as `pi.transcript-topic`
 custom entries outside model context, anchored to user/answer entry IDs. They
-survive reloads and are searchable through the transcript-memory extension.
+survive reloads and are searchable through the transcript-memory skill's CLI.
 There is no archive-wide topic backfill.
 
 Automatically managed display titles follow topic changes in the picker and

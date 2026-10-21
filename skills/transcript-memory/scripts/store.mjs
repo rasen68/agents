@@ -13,12 +13,13 @@ const text = content => typeof content === 'string' ? content : Array.isArray(co
 const clip = (value, limit) => String(value ?? '').slice(0, limit);
 const integer = (value, fallback, min, max) => Math.max(min, Math.min(max, Number.isFinite(value) ? Math.trunc(value) : fallback));
 
-function messageText(message) {
+function messageText(message, includeTools = false) {
   if (!message) return '';
+  if (!includeTools && !['user', 'assistant'].includes(message.role)) return '';
   if (message.role === 'bashExecution') return `${message.command || ''}\n${message.output || ''}`;
   if (!['user', 'assistant', 'toolResult'].includes(message.role)) return '';
   const parts = [text(message.content)];
-  if (message.role === 'assistant' && Array.isArray(message.content)) {
+  if (includeTools && message.role === 'assistant' && Array.isArray(message.content)) {
     for (const part of message.content) {
       if (part.type === 'toolCall') parts.push(`${part.name}\n${JSON.stringify(part.arguments ?? {})}`);
     }
@@ -77,6 +78,7 @@ async function parseSession(file, signal) {
         id: entry.id, parentId: entry.parentId ?? null, type: entry.type,
         timestamp: entry.timestamp, role: entry.message?.role,
         text: entry.type === 'message' ? messageText(entry.message) : '',
+        fullText: entry.type === 'message' ? messageText(entry.message, true) : '',
       };
       if (entry.type === 'custom' && entry.customType === TOPIC_TYPE && typeof entry.data?.title === 'string') {
         normalized.topic = {
@@ -140,6 +142,22 @@ function excerpt(value, terms, limit = 600) {
   return { text: value.slice(start, start + limit), textOffset: start, truncated: start > 0 || value.length > start + limit };
 }
 
+function allocateText(lengths, maxChars) {
+  const budgets = lengths.map(() => 0);
+  let remaining = maxChars;
+  let pending = lengths.map((_, index) => index).filter(index => lengths[index] > 0);
+  while (remaining > 0 && pending.length) {
+    const share = Math.max(1, Math.floor(remaining / pending.length));
+    for (const index of pending) {
+      const amount = Math.min(share, lengths[index] - budgets[index], remaining);
+      budgets[index] += amount;
+      remaining -= amount;
+    }
+    pending = pending.filter(index => budgets[index] < lengths[index]);
+  }
+  return budgets;
+}
+
 export class TranscriptStore {
   constructor() {
     this.cache = new Map();
@@ -189,8 +207,11 @@ export class TranscriptStore {
     return session;
   }
 
-  async search(params, { roots, cwd, signal }) {
+  async search(params, { roots, cwd, signal, currentSessionId }) {
     const warnings = [];
+    const excludedSessionIds = new Set(params.excludeSession || []);
+    if (currentSessionId && !params.includeCurrent) excludedSessionIds.add(currentSessionId);
+    const content = entry => params.includeTools ? entry.fullText : entry.text;
     const files = await this.files(roots, warnings, signal);
     const project = params.allProjects ? undefined : await projectRoot(params.project || cwd);
     const projects = new Map();
@@ -204,29 +225,31 @@ export class TranscriptStore {
     let total = 0;
     let skippedSessions = 0;
     let scannedSessions = 0;
+    let excludedSessions = 0;
     for (const file of files) {
       signal?.throwIfAborted();
       try {
         const session = await this.load(file, signal);
         scannedSessions++;
+        if (excludedSessionIds.has(session.id)) { excludedSessions++; continue; }
         for (const warning of session.warnings) if (warnings.length < 20) warnings.push(`${file}: ${warning}`);
         if (!projects.has(session.cwd)) projects.set(session.cwd, await projectRoot(session.cwd));
         const sessionProject = projects.get(session.cwd);
         if (project && project !== sessionProject) continue;
         const titleMatches = terms.every(term => session.title.toLowerCase().includes(term));
-        const firstMessage = session.entries.find(entry => entry.text);
+        const firstMessage = session.entries.find(entry => content(entry));
         for (const entry of session.entries) {
           let kind;
           let target = entry;
           let value;
           if (entry.topic?.changed) {
             target = session.byId.get(entry.topic.answerId);
-            if (!target) continue;
+            if (!target || !content(target)) continue;
             kind = 'topic';
             value = entry.topic.title;
-          } else if (entry.text) {
+          } else if (content(entry)) {
             kind = 'text';
-            value = entry.text;
+            value = content(entry);
           } else continue;
           const timestamp = Date.parse(target.timestamp || session.timestamp);
           if (!Number.isFinite(timestamp) || timestamp < from || timestamp > to) continue;
@@ -239,7 +262,7 @@ export class TranscriptStore {
             timestamp: target.timestamp, project: sessionProject, cwd: session.cwd,
             title: session.title, topic: kind === 'topic' ? entry.topic.title : undefined,
             kind: titleMatch && !ownMatch ? 'title' : kind, role: target.role,
-            ...excerpt(kind === 'topic' ? target.text : value, terms),
+            ...excerpt(kind === 'topic' ? content(target) : value, terms),
           };
           matches.push(result);
           // Keep only the requested window's prefix instead of every match's text.
@@ -254,6 +277,7 @@ export class TranscriptStore {
     }
     return {
       notice: NOTICE, project: project || 'all', scannedSessions, skippedSessions,
+      excludedSessions, excludedSessionIds: [...excludedSessionIds],
       coverageIncomplete: warnings.length > 0, warnings: warnings.slice(0, 20),
       total, offset, nextOffset: total > offset + limit ? offset + limit : null,
       results: await Promise.all(matches.slice(offset, offset + limit).map(async match => {
@@ -271,12 +295,14 @@ export class TranscriptStore {
   async read(params, { roots, signal }) {
     const warnings = [];
     const files = await this.files(roots, warnings, signal);
+    const content = entry => params.includeTools ? entry.fullText : entry.text;
     const file = await realpath(resolve(params.sessionFile));
     if (!files.includes(file)) throw new Error('Session file is not in the configured transcript stores');
     const session = await this.load(file, signal);
     if (params.sessionId && params.sessionId !== session.id) throw new Error('Session identity changed; search again');
     const anchor = session.byId.get(params.entryId);
     if (!anchor) throw new Error('Transcript entry not found');
+    if (!content(anchor)) throw new Error('Entry has no readable text in this mode; tool traffic requires --include-tools');
     let path = ancestry(session, anchor.id);
     const before = integer(params.before, 2, 0, 20);
     const after = integer(params.after, 2, 0, 20);
@@ -289,7 +315,7 @@ export class TranscriptStore {
       const branch = ancestry(session, leaf.id);
       const index = branch.findIndex(entry => entry.id === anchor.id);
       if (index < 0) throw new Error('Selected continuation is not a descendant of the requested entry');
-      future = branch.slice(index + 1).filter(entry => entry.text).slice(0, after);
+      future = branch.slice(index + 1).filter(entry => content(entry)).slice(0, after);
     } else {
       let cursor = anchor;
       const visited = new Set(path.map(entry => entry.id));
@@ -297,44 +323,41 @@ export class TranscriptStore {
         const children = session.children.get(cursor.id) ?? [];
         if (children.length > 1) {
           choicesTruncated = children.length > 20;
-          for (const child of children.slice(0, 20)) choices.push({ entryId: child.id, timestamp: child.timestamp, role: child.role, preview: clip(child.text, 120) });
+          for (const child of children.slice(0, 20)) choices.push({ entryId: child.id, timestamp: child.timestamp, role: child.role, preview: clip(content(child), 120) });
           break;
         }
         if (!children.length) break;
         cursor = children[0];
         if (visited.has(cursor.id)) throw new Error('Cycle in transcript continuation');
         visited.add(cursor.id);
-        if (cursor.text) future.push(cursor);
+        if (content(cursor)) future.push(cursor);
       }
     }
-    const preceding = before ? path.slice(0, -1).filter(entry => entry.text).slice(-before) : [];
+    const preceding = before ? path.slice(0, -1).filter(entry => content(entry)).slice(-before) : [];
     path = [...preceding, anchor, ...future];
     const maxChars = integer(params.maxChars, 8000, 500, 16000);
-    const precedingBudget = Math.floor(maxChars / 4 / Math.max(1, preceding.length));
-    let remaining = maxChars;
     const textOffset = integer(params.textOffset, 0, 0, Number.MAX_SAFE_INTEGER);
-    const messages = [];
-    let nextEntryId = null;
-    for (const entry of path) {
+    const starts = path.map(entry => entry.id === anchor.id ? textOffset : 0);
+    const budgets = allocateText(path.map((entry, index) => Math.max(0, content(entry).length - starts[index])), maxChars);
+    const messages = path.map((entry, index) => {
       signal?.throwIfAborted();
-      if (remaining <= 0) { nextEntryId = entry.id; break; }
-      const start = entry.id === anchor.id ? textOffset : 0;
-      const budget = preceding.includes(entry) ? precedingBudget
-        : entry.id === anchor.id ? remaining : Math.min(2000, remaining);
-      const content = entry.text.slice(start, start + budget);
-      remaining -= content.length;
-      messages.push({
+      const start = starts[index];
+      const value = content(entry);
+      const excerpt = value.slice(start, start + budgets[index]);
+      return {
         entryId: entry.id, parentId: entry.parentId, timestamp: entry.timestamp,
-        role: entry.role || entry.type, text: content, textOffset: start,
-        nextTextOffset: entry.text.length > start + content.length ? start + content.length : null,
-      });
-    }
+        role: entry.role || entry.type, text: excerpt, textOffset: start,
+        nextTextOffset: value.length > start + excerpt.length ? start + excerpt.length : null,
+      };
+    });
+    const truncatedEntries = messages.filter(message => message.nextTextOffset !== null).map(message => message.entryId);
     return {
       notice: NOTICE, sessionFile: file, sessionId: session.id, title: session.title,
       cwd: session.cwd, topic: topicAt(session, anchor), entryId: anchor.id,
       warnings: [...warnings, ...session.warnings].slice(0, 20), messages,
       continuationChoices: choices, continuationChoicesTruncated: choicesTruncated,
-      nextEntryId,
+      textComplete: truncatedEntries.length === 0, truncatedEntries,
+      nextEntryId: null,
     };
   }
 }

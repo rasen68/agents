@@ -19,11 +19,13 @@ borders. It also hides `.md` edit previews, diffs, and write contents, leaving
 only the tool label and path. Errors remain visible; other file types are unchanged.
 Requires Pi 1.3.0 or later.
 
-The [`transcript-memory` extension](extensions/transcript-memory/README.md) adds
-`transcript_search` and `transcript_read` for bounded historical retrieval.
+The [`transcript-memory` skill](../skills/transcript-memory/README.md) provides
+bounded historical retrieval through a bundled Node.js CLI, without always-loaded
+model tools. Search and read default to conversation prose; tool traffic is opt-in.
 The parallel-sessions fork records searchable topic history after completed
 answers while preserving manual titles. Existing transcripts are searchable
-without a model-based backfill.
+without a model-based backfill. Setup removes its former extension link when it
+points into this checkout; reload Pi afterward to unload the old tools.
 
 Extensions and supporting directories are linked by setup. Existing real files
 and directories are preserved, as with the rest of setup. To adopt a repository

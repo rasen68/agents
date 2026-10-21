@@ -49,7 +49,7 @@ for config in settings.json keybindings.json; do
 done
 
 # Remove only links created by earlier versions of setup.
-for legacy in extensions/cd extensions/reasoning-shortcuts.ts extensions/picker-navigation.ts picker-navigation; do
+for legacy in extensions/cd extensions/reasoning-shortcuts.ts extensions/picker-navigation.ts picker-navigation extensions/transcript-memory; do
     target="$HOME/.pi/agent/$legacy"
     if [[ -L $target && $(readlink "$target") == "$TOOLING/pi/$legacy" ]]; then
         rm -- "$target" || exit "$?"

@@ -14,8 +14,9 @@ Do not create empty scaffolding or require future agents to maintain an index.
 ## Memory and artifacts
 
 Use transcripts for historical decisions, research, corrections, and verification.
-In Pi, search them with `transcript_search` and read bounded context with
-`transcript_read`. Confirm current facts against the repository.
+Use the `transcript-memory` skill to search prior Pi conversations and read
+bounded context through its bundled CLI. Tool traffic is opt-in. Confirm current
+facts against the repository.
 
 Write specs or documentation when requested. Keep handoffs short and limited
 to unfinished work. Save reusable scripts under `scripts/` with necessary usage
