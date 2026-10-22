@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { InteractiveMode } from '@earendil-works/pi-coding-agent';
 
 const { createJiti } = createRequire(import.meta.resolve('@earendil-works/pi-coding-agent'))('jiti');
 const { PiSessionsHost, installSessionLifecycle, default: extension } = await createJiti(import.meta.url).import('../index.ts');
@@ -65,7 +66,7 @@ test('closing the active session returns to the most recently used remaining ses
   assert.equal(host.activeId, second.id);
 });
 
-test('lifecycle hook adopts the initial mode and makes native quit session-local', async () => {
+test('double Ctrl+C from a parallel session exits the app and disposes every session', async () => {
   const calls = [];
   const host = new PiSessionsHost(code => calls.push(['exit', code]));
   class NativeMode {
@@ -81,10 +82,19 @@ test('lifecycle hook adopts the initial mode and makes native quit session-local
   await second.init();
   const next = host.listLive().find(r => r.mode === second);
   await host.activate(next.id);
-  await first.shutdown();
-  assert.equal(host.activeId, next.id);
+  second.lastSigintTime = 0;
+  second.clearEditor = () => calls.push(['clear', 'second']);
+  InteractiveMode.prototype.handleCtrlC.call(second);
+  assert.ok(calls.some(c => c[0] === 'clear'));
+  assert.equal(host.listLive().length, 2);
+  assert.ok(!calls.some(c => c[0] === 'exit'));
+  InteractiveMode.prototype.handleCtrlC.call(second);
+  await host.shutdown();
+  assert.equal(host.activeId, null);
   assert.equal(host.get(initial.id), undefined);
-  await second.shutdown();
+  assert.equal(host.listLive().length, 0);
+  assert.deepEqual(calls.filter(c => c[0] === 'dispose'), [['dispose', 'first'], ['dispose', 'second']]);
+  await first.shutdown();
   assert.deepEqual(calls.filter(c => c[0] === 'exit'), [['exit', 0]]);
 });
 

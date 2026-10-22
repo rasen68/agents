@@ -184,7 +184,7 @@ function createInheritedSettingsManager(
 	};
 }
 
-async function resolveChildSessionOptions(
+export async function resolveChildSessionOptions(
 	services: any,
 	sessionManager: any,
 	inheritance: any,
@@ -202,7 +202,7 @@ async function resolveChildSessionOptions(
 	const { resolveModelScope } = await loadModelResolver();
 	const scopedModels = await resolveModelScope(
 		patterns,
-		services.modelRegistry,
+		services.modelRuntime,
 	);
 	if (!scopedModels.length) return options;
 
@@ -213,7 +213,7 @@ async function resolveChildSessionOptions(
 		const savedModelId = services.settingsManager?.getDefaultModel?.();
 		const savedModel =
 			savedProvider && savedModelId
-				? services.modelRegistry.find(savedProvider, savedModelId)
+				? services.modelRuntime.getModel(savedProvider, savedModelId)
 				: undefined;
 		const selected =
 			scopedModels.find((scoped: any) =>
@@ -915,10 +915,7 @@ export function installSessionLifecycle(host: PiSessionsHost, Mode = Interactive
 	proto.shutdown = async function (options?: any) {
 		const record = host.recordForMode(this);
 		if (!record) return await shutdown.call(this, options);
-		if (options?.fromSignal) return await host.shutdown();
-		if (record.expectedStop) return;
-		this.shutdownRequested = false;
-		await host.stopSession(record.id);
+		return await host.shutdown();
 	};
 	proto[INTERACTIVE_MODE_LIFECYCLE_PATCHED] = true;
 }
