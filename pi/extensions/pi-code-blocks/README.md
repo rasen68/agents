@@ -5,12 +5,6 @@ syntax colors, line numbers, grid borders, and a dark grey background, without
 visible Markdown fence markers. Conversation history stays as Markdown. User
 messages and thinking aren't changed.
 
-Also shows `.md` edits and writes as a block containing only **edit** or
-**write** and the filepath. Edit previews, completed diffs, and write contents
-are hidden, even when expanded. Errors remain visible. Other file types and
-tools keep their existing rendering. This only changes display, not execution, model results, or saved
-session data.
-
 Requires Pi's `registerMarkdownTransformer` API, available in Pi 1.3.0, and
 `batcat` or `bat` on PATH. On Debian/Ubuntu, install bat with `sudo apt install bat`.
 `batcat` takes precedence if both names exist.

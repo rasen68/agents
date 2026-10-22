@@ -1,39 +1,11 @@
 # Pi configuration
 
-`../setup.sh` copies settings and keybinding defaults into `~/.pi/agent` only
-when those files don't exist. Pi can update its own copies without modifying
-this checkout. Existing settings, authentication, device identity, and sessions
-stay local. Model names are personal defaults and require a provider that offers
-them. Choose another model in `/model` if necessary.
+Contains four vibecoded extensions; I cannot guarantee anything about the code beyond this point.
 
-The [`nav` extension](extensions/nav/README.md) combines `/cd`, reasoning-level
-shortcuts, empty-search picker navigation, and an Alt+N transcript viewer.
-Use counted j/k or Up/Down to scroll, and h/l or Left/Right to jump between
-assistant replies. Alt+N returns to the prompt; every open starts at the bottom.
-Setup removes obsolete links for the three former extensions only when they
-point into this checkout.
+[`nav`](extensions/nav/README.md) combines `/cd`, Alt+j/k reasoning-level shortcuts, empty-search picker navigation, and an Alt+N `less`-style transcript viewer.
 
-The [`pi-code-blocks` extension](extensions/pi-code-blocks/README.md) renders
+[`pi-code-blocks`](extensions/pi-code-blocks/README.md) renders
 assistant code fences with `batcat` or `bat` syntax colors, line numbers, and
-borders. It also hides `.md` edit previews, diffs, and write contents, leaving
-only the tool label and path. Errors remain visible; other file types are unchanged.
-Requires Pi 1.3.0 or later.
+borders.
 
-The [`transcript-memory` skill](../skills/transcript-memory/README.md) provides
-bounded historical retrieval through a bundled Node.js CLI, without always-loaded
-model tools. Search and read default to conversation prose; tool traffic is opt-in.
-The parallel-sessions fork records searchable topic history after completed
-answers while preserving manual titles. Existing transcripts are searchable
-without a model-based backfill. Setup removes its former extension link when it
-points into this checkout; reload Pi afterward to unload the old tools.
-
-Extensions and supporting directories are linked by setup. Existing real files
-and directories are preserved, as with the rest of setup. To adopt a repository
-version over an existing local copy, move the local copy to a backup outside
-Pi's discovery paths, then rerun setup. Don't leave extension backups under
-`extensions/`, where Pi would load them too.
-
-`../install-clis.sh` installs the npm packages in `settings.json` and registers
-the local forks from this checkout. To update just those package declarations,
-run `node pi/install.mjs` with Pi and Node on PATH. See
-[`local-packages/README.md`](local-packages/README.md) for the retained forks.
+We maintain local forks of [`pi-goal-x`](local-packages/pi-goal-x/README.md) and [`pi-parallel-sessions`](local-packages/pi-parallel-sessions/README.md).
